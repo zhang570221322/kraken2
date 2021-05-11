@@ -17,7 +17,6 @@
 #include "readcounts.h"
 //新加的类.
 #include "additional_map.h"
-using namespace kraken2;
 
 using std::cerr;
 using std::cout;
@@ -469,7 +468,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
 }
 
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
-                    Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap add_map)
+                    Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap add_map, ostringstream &koss)
 {
   taxid_t max_taxon = 0;
   uint32_t max_score = 0;
@@ -501,6 +500,7 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts,
     {
       // 达到阈值,写入所有的冲突kmer
       add_map.saveTemp(ancestor);
+      koss << "current score:" << score << "\tmax score:" << max_score << "\n";
       max_taxon = taxonomy.LowestCommonAncestor(max_taxon, taxon);
     }
   }
@@ -658,7 +658,7 @@ finished_searching:
   if (opts.use_translated_search) // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
   // 添加一个参数curr_taxon_counts, 用于处理权重
-  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map);
+  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss);
   // Void a call made by too few minimizer groups
   if (call && minimizer_hit_groups < opts.minimum_hit_groups)
     call = 0;
