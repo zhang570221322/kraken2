@@ -25,6 +25,7 @@ require "$KRAKEN2_DIR/kraken2lib.pm";
 $ENV{"KRAKEN2_DIR"} = $KRAKEN2_DIR;
 $ENV{"PATH"} = "$KRAKEN2_DIR:$ENV{PATH}";
 
+my $SEARCH_PHASE = "$KRAKEN2_DIR/search_phase";
 my $CLASSIFY = "$KRAKEN2_DIR/classify";
 my $GZIP_MAGIC = chr(hex "1f") . chr(hex "8b");
 my $BZIP2_MAGIC = "BZ";
@@ -49,6 +50,7 @@ my $use_mpa_style = 0;
 my $report_zero_counts = 0;
 my $minimum_hit_groups = 2;
 my $report_minimizer_data = 0;
+my $keep_map = 1;
 
 GetOptions(
   "help" => \&display_help,
@@ -72,6 +74,7 @@ GetOptions(
   "report-zero-counts" => \$report_zero_counts,
   "minimum-hit-groups=i" => \$minimum_hit_groups,
   "report-minimizer-data" => \$report_minimizer_data,
+  "keep-map" => \$keep_map
 );
 
 if (! defined $threads) {
@@ -95,7 +98,19 @@ for my $file ($taxonomy, $kht_file, $opt_file) {
     die "$PROG: $file does not exist!\n";
   }
 }
+my $lfh;
+my $hash_plus = "$db_prefix/conflict_hash.k2d";
 
+if ( $keep_map) {
+  # 创建新的文件
+ if (! -e $hash_plus) {  
+	open($lfh, '>', $hash_plus) or
+	 die "Unable to open file $hash_plus : $!";
+	close($lfh) or 
+   die "Unable to close file : $hash_plus $!";
+}
+
+}
 if ($paired && ((@ARGV % 2) != 0 || @ARGV == 0)) {
   die "$PROG: --paired requires positive and even number filenames\n";
 }
@@ -123,6 +138,7 @@ if ($auto_detect) {
 # set flags for classifier
 my @flags;
 push @flags, "-H", $kht_file;
+push @flags, "-A", $hash_plus;
 push @flags, "-t", $taxonomy;
 push @flags, "-o", $opt_file;
 push @flags, "-p", $threads;
@@ -173,8 +189,14 @@ if ($compressed) {
   @ARGV = @replacement_ARGV;
 }
 
-exec $CLASSIFY, @flags, @ARGV;
+if ($keep_map) {
+  exec $SEARCH_PHASE, @flags, @ARGV;
 die "$PROG: exec error: $!\n";
+
+}else {exec $CLASSIFY, @flags, @ARGV;
+die "$PROG: exec error: $!\n";
+}
+
 
 sub usage {
   my $exit_code = @_ ? shift : 64;
@@ -212,6 +234,7 @@ Options:
   --use-names             Print scientific names instead of just taxids
   --gzip-compressed       Input files are compressed with gzip
   --bzip2-compressed      Input files are compressed with bzip2
+  --keep-map         	  Keep and update the additiional map if is present
   --minimum-hit-groups NUM
                           Minimum number of hit groups (overlapping k-mers
                           sharing the same minimizer) needed to make a call
