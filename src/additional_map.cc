@@ -2,7 +2,10 @@
 
 using std::cout;
 using std::endl;
+using std::getline;
 using std::ifstream;
+using std::istringstream;
+using std::ofstream;
 using std::string;
 using std::unordered_map;
 using std::vector;
@@ -10,23 +13,74 @@ using std::vector;
 namespace kraken2
 {
 
-    void AdditionalMap::AddPair(uint64_t minimizer)
+    bool isFileEmpty(std::ifstream &pFile)
+    {
+        return pFile.peek() == ifstream::traits_type::eof();
+    }
+
+    void AdditionalMap::ReadConflictFile(const char *filename)
+    {
+        ifstream ifile(filename);
+
+        if (ifile.is_open() && !isFileEmpty(ifile))
+        {
+
+            while (!ifile.eof())
+            {
+                string line;
+                uint64_t key;
+                taxid_t value;
+
+                getline(ifile, line);
+                istringstream linestream(line);
+                linestream >> key >> value;
+
+                AddWeight(key, value);
+            }
+        }
+        else if (!ifile.is_open())
+        {
+            ofstream outfile(filename);
+            outfile << "";
+            outfile.close();
+        }
+
+        ifile.close();
+    }
+    void AdditionalMap::WriteConflictMap(const char *filename)
+    {
+        if (GetConflictSize())
+        {
+            ofstream ofile(filename);
+            if (ofile.is_open())
+            {
+                for (auto x : conflict_ump)
+                {
+                    ofile << x.first << "\t" << x.second;
+                    ofile << "\n";
+                }
+            }
+
+            ofile.close();
+        }
+    }
+    void AdditionalMap::AddMinimizer(uint64_t minimizer)
     {
         uint16_t defalut_weight = 2;
         //如果已经存在次数,再继续提升次数
-        if (ump.find(minimizer) != ump.end())
+        if (conflict_ump.find(minimizer) != conflict_ump.end())
         {
-            ump[minimizer] = 1 + ump[minimizer];
+            conflict_ump[minimizer] = 1 + conflict_ump[minimizer];
         }
         else
         {
-            Add(minimizer, defalut_weight);
+            AddWeight(minimizer, defalut_weight);
         }
     }
 
-    void AdditionalMap::Add(uint64_t minimizer, uint16_t weight)
+    void AdditionalMap::AddWeight(uint64_t minimizer, uint16_t weight)
     {
-        ump.emplace(minimizer, weight);
+        conflict_ump.emplace(minimizer, weight);
     }
     void AdditionalMap::clearTemp()
     {
@@ -48,7 +102,7 @@ namespace kraken2
                 vector<uint64_t> kmers = temp[code];
                 for (size_t i = 0; i < kmers.size(); i++)
                 {
-                    AddPair(kmers[i]);
+                    AddMinimizer(kmers[i]);
                 }
             }
         }
@@ -59,22 +113,101 @@ namespace kraken2
     {
         uint16_t weight = 1;
 
-        if (ump.find(minimizer) != ump.end())
+        if (conflict_ump.find(minimizer) != conflict_ump.end())
         {
-            weight = ump[minimizer];
+            weight = conflict_ump[minimizer];
         }
 
         return weight;
     }
 
-    size_t AdditionalMap::GetSize()
+    size_t AdditionalMap::GetConflictSize()
     {
-        return ump.size();
+        return conflict_ump.size();
     }
 
-    bool AdditionalMap::IsEmpty()
+    //对于未识别来说
+
+    void AdditionalMap::ReadAdditionalFile(const char *filename)
     {
-        return ump.size() == 0;
+        ifstream ifile(filename);
+
+        if (ifile.is_open() && !isFileEmpty(ifile))
+        {
+
+            while (!ifile.eof())
+            {
+                string line;
+                uint64_t key;
+                taxid_t value;
+
+                getline(ifile, line);
+                istringstream linestream(line);
+                linestream >> key >> value;
+
+                AddTaxon(key, value);
+            }
+        }
+        else if (!ifile.is_open())
+        {
+            ofstream outfile(filename);
+            outfile << "";
+            outfile.close();
+        }
+
+        ifile.close();
+    }
+    void AdditionalMap::WriteAdditionalMap(const char *filename)
+    {
+        if (GetAdditionaSize())
+        {
+            ofstream ofile(filename);
+            if (ofile.is_open())
+            {
+                for (auto x : additional_ump)
+                {
+                    ofile << x.first << "\t" << x.second;
+                    ofile << "\n";
+                }
+            }
+
+            ofile.close();
+        }
+    }
+    void AdditionalMap::AddAdditionalPair(uint64_t minimizer, taxid_t tax_id, Taxonomy &taxonomy)
+    {
+        taxid_t new_tax = tax_id;
+        taxid_t old_tax = 0;
+
+        if (additional_ump.find(minimizer) != additional_ump.end())
+        {
+            old_tax = additional_ump[minimizer];
+            new_tax = taxonomy.LowestCommonAncestor(new_tax, old_tax);
+            additional_ump[minimizer] = new_tax;
+        }
+        else
+        {
+            AddTaxon(minimizer, new_tax);
+        }
+    }
+    taxid_t AdditionalMap::GetTax(uint64_t minimizer)
+    {
+        taxid_t tax = 0;
+
+        if (additional_ump.find(minimizer) != additional_ump.end())
+        {
+            tax = additional_ump[minimizer];
+        }
+
+        return tax;
+    }
+    size_t AdditionalMap::GetAdditionaSize()
+    {
+        return additional_ump.size();
     }
 
+    void AdditionalMap::AddTaxon(uint64_t minimizer, taxid_t tax_id)
+    {
+        additional_ump.emplace(minimizer, tax_id);
+    }
 }
