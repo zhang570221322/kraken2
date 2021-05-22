@@ -4,7 +4,7 @@ CXXFLAGS += -DLINEAR_PROBING
 
 .PHONY: all clean install
 
-PROGS = estimate_capacity build_db classify dump_table lookup_accession_numbers
+PROGS = estimate_capacity build_db classify classify_phase dump_table lookup_accession_numbers
 
 all: $(PROGS)
 
@@ -27,7 +27,7 @@ aa_translate.o: aa_translate.cc aa_translate.h
 utilities.o: utilities.cc utilities.h
 
 classify.o: classify.cc kraken2_data.h kv_store.h taxonomy.h additional_map.h seqreader.h mmscanner.h compact_hash.h aa_translate.h reports.h utilities.h readcounts.h
-classify_phase.o: classify.cc kraken2_data.h kv_store.h taxonomy.h additional_map.h seqreader.h mmscanner.h compact_hash.h aa_translate.h reports.h utilities.h readcounts.h
+classify_phase.o: classify_phase.cc kraken2_data.h kv_store.h taxonomy.h additional_map.h seqreader.h mmscanner.h compact_hash.h aa_translate.h reports.h utilities.h readcounts.h
 dump_table.o: dump_table.cc compact_hash.h taxonomy.h mmscanner.h kraken2_data.h reports.h
 estimate_capacity.o: estimate_capacity.cc kv_store.h mmscanner.h seqreader.h utilities.h
 build_db.o: build_db.cc taxonomy.h mmscanner.h seqreader.h compact_hash.h kv_store.h kraken2_data.h utilities.h
@@ -36,7 +36,7 @@ lookup_accession_numbers.o: lookup_accession_numbers.cc mmap_file.h utilities.h
 build_db: build_db.o mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o utilities.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-classify_phase: classify.o reports.o hyperloglogplus.o additional_map.o mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
+classify_phase: classify_phase.o reports.o hyperloglogplus.o additional_map.o mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 classify: classify.o reports.o hyperloglogplus.o additional_map.o mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o

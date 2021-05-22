@@ -145,11 +145,11 @@ int main(int argc, char **argv)
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
 
-  cerr << "Loading additional hashmap...";
+  cerr << "Loading additional hashmap..." << endl;
   AdditionalMap add_map;
   add_map.ReadConflictFile(opts.conflict_filename.c_str());
   cerr << " done." << endl;
-
+  cerr << " Exec classify." << endl;
   ClassificationStats stats = {0, 0, 0};
 
   OutputStreamData outputs = {false, false, nullptr, nullptr, nullptr, nullptr, &std::cout};
@@ -182,7 +182,6 @@ int main(int argc, char **argv)
     }
   }
   gettimeofday(&tv2, nullptr);
-  add_map.WriteConflictMap(opts.conflict_filename.c_str());
 
   delete hash_ptr;
 
@@ -497,10 +496,9 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts,
       max_score = score;
       max_taxon = taxon;
     }
-    else if (labs(score - max_score) <= max_score / 20.0)
+    else if (labs(score - max_score) <= max_score / 5.0)
     {
-      // 达到阈值,写入所有的冲突kmer
-      add_map.saveTemp(ancestor);
+
       max_taxon = taxonomy.LowestCommonAncestor(max_taxon, taxon);
     }
   }
@@ -554,8 +552,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
   taxid_t call = 0;
   taxa.clear();
   hit_counts.clear();
-  // 清除临时数组
-  add_map.clearTemp();
+
   auto frame_ct = opts.use_translated_search ? 6 : 1;
   int64_t minimizer_hit_groups = 0;
 
@@ -618,11 +615,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               minimizer_hit_groups++;
               // New minimizer should trigger registering minimizer in RC/HLL
               auto last = scanner.last_minimizer();
-              // 命中为非leaf的kmer,将其添加到temp.
-              if (!taxonomy.nodes()[taxon].child_count)
-              {
-                add_map.addk_v2Temp(taxon, last);
-              }
+
               curr_taxon_counts[taxon].add_kmer(last);
             }
           }

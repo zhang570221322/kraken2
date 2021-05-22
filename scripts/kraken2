@@ -25,7 +25,7 @@ require "$KRAKEN2_DIR/kraken2lib.pm";
 $ENV{"KRAKEN2_DIR"} = $KRAKEN2_DIR;
 $ENV{"PATH"} = "$KRAKEN2_DIR:$ENV{PATH}";
 
-my $SEARCH_PHASE = "$KRAKEN2_DIR/search_phase";
+my $SEARCH_PHASE = "$KRAKEN2_DIR/classify_phase";
 my $CLASSIFY = "$KRAKEN2_DIR/classify";
 my $GZIP_MAGIC = chr(hex "1f") . chr(hex "8b");
 my $BZIP2_MAGIC = "BZ";

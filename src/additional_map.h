@@ -17,9 +17,11 @@ namespace kraken2
         void WriteConflictMap(const char *filename);
         void clearTemp();
         void addk_v2Temp(taxid_t taxon, uint64_t minimizer);
-        void saveTemp(vector<taxid_t> &taxa);
-        uint16_t GetWeight(uint64_t minimizer);
+        void saveTemp();
+        double GetWeight(uint64_t minimizer);
         size_t GetConflictSize();
+        void AddAncestor(taxid_t taxa);
+        void clearAncestor();
 
         // 对于未识别的来说的.
         void ReadAdditionalFile(const char *filename);
@@ -31,8 +33,9 @@ namespace kraken2
     private:
         // 对于冲突来说的
         void AddMinimizer(uint64_t minimizer);
-        std::unordered_map<uint64_t, uint16_t> conflict_ump;
+        std::unordered_map<uint64_t, uint64_t> conflict_ump;
         std::unordered_map<taxid_t, vector<uint64_t>> temp;
+        std::vector<taxid_t> ancestor;
         void AddWeight(uint64_t minimizer, uint16_t weight);
         // 对于未识别的来说的.
         std::unordered_map<uint64_t, taxid_t> additional_ump;

@@ -64,6 +64,18 @@ namespace kraken2
             ofile.close();
         }
     }
+    double AdditionalMap::GetWeight(uint64_t minimizer)
+    //y =  1.0 / (0.81 + 0.1 * weight * weight);  X为这个kmer冲突次数
+    {
+        uint16_t weight = 1;
+
+        if (conflict_ump.find(minimizer) != conflict_ump.end())
+        {
+            weight = conflict_ump[minimizer];
+        }
+        return 1.0 / (0.81 + 0.05 * weight * weight);
+    }
+
     void AdditionalMap::AddMinimizer(uint64_t minimizer)
     {
         uint16_t defalut_weight = 2;
@@ -92,11 +104,11 @@ namespace kraken2
     {
         temp[taxon].push_back(minimizer);
     }
-    void AdditionalMap::saveTemp(vector<taxid_t> &taxa)
+    void AdditionalMap::saveTemp()
     {
-        for (size_t i = 0; i < taxa.size(); i++)
+        for (size_t i = 0; i < ancestor.size(); i++)
         {
-            auto code = taxa[i];
+            auto code = ancestor[i];
             if (temp.find(code) != temp.end())
             {
                 vector<uint64_t> kmers = temp[code];
@@ -109,23 +121,19 @@ namespace kraken2
         clearTemp();
     }
 
-    uint16_t AdditionalMap::GetWeight(uint64_t minimizer)
-    {
-        uint16_t weight = 1;
-
-        if (conflict_ump.find(minimizer) != conflict_ump.end())
-        {
-            weight = conflict_ump[minimizer];
-        }
-
-        return weight;
-    }
-
     size_t AdditionalMap::GetConflictSize()
     {
         return conflict_ump.size();
     }
 
+    void AdditionalMap::AddAncestor(taxid_t taxa)
+    {
+        ancestor.push_back(taxa);
+    }
+    void AdditionalMap::clearAncestor()
+    {
+        ancestor.clear();
+    }
     //对于未识别来说
 
     void AdditionalMap::ReadAdditionalFile(const char *filename)
