@@ -6,3 +6,4 @@ src/dump_table
 src/lookup_accession_numbers
 test/*
 *_bak*
+src/classify_phase
