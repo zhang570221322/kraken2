@@ -575,10 +575,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
       }
       uint64_t last_minimizer = UINT64_MAX;
       taxid_t last_taxon = TAXID_MAX;
-      uint16_t last_weight = 1;
+      double last_weight = 1;
       while ((minimizer_ptr = scanner.NextMinimizer()) != nullptr)
       {
-        uint16_t weight;
+        double weight;
         taxid_t taxon;
         if (scanner.is_ambiguous())
         {
@@ -595,7 +595,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                 skip_lookup = true;
             }
             taxon = 0;
-            weight = 1;
+            weight = 1.0;
             if (!skip_lookup)
             {
               taxon = hash->Get(*minimizer_ptr);
