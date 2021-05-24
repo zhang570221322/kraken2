@@ -138,10 +138,9 @@ int main(int argc, char **argv)
   auto opts_filesize = sb.st_size;
   idx_opt_fs.read((char *)&idx_opts, opts_filesize);
   opts.use_translated_search = !idx_opts.dna_db;
-
+  cerr << "Loading database information..." << endl;
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
-  cerr << "Loading database information..." << endl;
   cerr << "Loading additional hashmap..." << endl;
   AdditionalMap add_map;
   add_map.ReadConflictFile(opts.conflict_filename.c_str());
@@ -179,7 +178,7 @@ int main(int argc, char **argv)
     }
   }
   gettimeofday(&tv2, nullptr);
-  cerr << "\nWrite conflict kmer into " << opts.conflict_filename.c_str() << " (" << add_map.GetConflictSize() << ")" << endl;
+  cerr << "\nWrite conflict kmer into " << opts.conflict_filename.c_str() << " (kmers:" << add_map.GetConflictSize() << ")" << endl;
   add_map.WriteConflictMap(opts.conflict_filename.c_str());
 
   delete hash_ptr;
@@ -261,13 +260,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
     //多线程添加冲突
     unordered_map<taxid_t, vector<uint64_t>> thread_conflict_temp;
     set<taxid_t> thread_conflict_ancestor;
+    AdditionalMap thread_add_map;
 
     while (true)
     {
       thread_stats.total_sequences = 0;
       thread_stats.total_bases = 0;
       thread_stats.total_conflict = 0;
-
+      thread_add_map.conflict_ump.clear();
       auto ok_read = false;
 
 #pragma omp critical(seqread)
@@ -327,7 +327,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
         }
         ClassifySequence(seq1, seq2,
                          kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-                         taxa, hit_counts, translated_frames, thread_taxon_counters, add_map,
+                         taxa, hit_counts, translated_frames, thread_taxon_counters, thread_add_map,
                          thread_conflict_temp, thread_conflict_ancestor);
 
         thread_stats.total_bases += seq1.seq.size();
@@ -360,7 +360,16 @@ void ProcessFiles(const char *filename1, const char *filename2,
       {
         output_queue.push(out_data);
       }
+      // 合并所有的冲突的kmer
+#pragma omp critical(merge_conflict_map)
+      {
+        unordered_map<uint64_t, uint64_t> &shared_conflict_ump = add_map.conflict_ump;
 
+        for (auto &kv_pair : thread_add_map.conflict_ump)
+        {
+          shared_conflict_ump[kv_pair.first] += kv_pair.second;
+        }
+      }
 #pragma omp critical(update_taxon_counters)
       {
         for (auto &kv_pair : thread_taxon_counters)
@@ -423,7 +432,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
     (*outputs.unclassified_output2) << std::flush;
 }
 
-taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &add_map,
+taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &thread_add_map,
                     ostringstream &koss, set<taxid_t> &thread_conflict_ancestor, unordered_map<taxid_t, vector<uint64_t>> &thread_conflict_temp, ClassificationStats &stats)
 {
   taxid_t max_taxon = 0;
@@ -456,10 +465,7 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
       stats.total_conflict += 1;
       max_taxon = taxonomy.LowestCommonAncestor(max_taxon, taxon);
       // 达到阈值,写入所有的冲突kmer
-#pragma omp critical(save_temp)
-      {
-        add_map.saveTemp(thread_conflict_temp, thread_conflict_ancestor);
-      }
+      thread_add_map.saveTemp(thread_conflict_temp, thread_conflict_ancestor);
     }
   }
 
@@ -470,7 +476,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                          KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
                          Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
                          vector<taxid_t> &taxa, taxon_counts_t &hit_counts, vector<string> &tx_frames,
-                         taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map,
+                         taxon_counters_t &curr_taxon_counts, AdditionalMap &thread_add_map,
                          unordered_map<taxid_t, vector<uint64_t>> &thread_conflict_temp, set<taxid_t> &thread_conflict_ancestor)
 {
   uint64_t *minimizer_ptr;
@@ -578,7 +584,7 @@ finished_searching:
     total_kmers--;                // account for the mate pair marker
   if (opts.use_translated_search) // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
-  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss, thread_conflict_ancestor, thread_conflict_temp, stats);
+  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, thread_add_map, koss, thread_conflict_ancestor, thread_conflict_temp, stats);
 
   return call;
 }

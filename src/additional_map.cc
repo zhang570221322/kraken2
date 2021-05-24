@@ -79,10 +79,12 @@ namespace kraken2
 
     void AdditionalMap::AddMinimizer(uint64_t minimizer)
     {
+
         uint16_t defalut_weight = 2;
         //如果已经存在次数,再继续提升次数
         if (conflict_ump.find(minimizer) != conflict_ump.end())
         {
+
             conflict_ump[minimizer] = 1 + conflict_ump[minimizer];
         }
         else
@@ -94,12 +96,13 @@ namespace kraken2
     // 持久化,将临时的temp,但是对于多线程必须是串行进行的.
     void AdditionalMap::saveTemp(unordered_map<taxid_t, vector<uint64_t>> &temp, set<taxid_t> &ancestor)
     {
+
         for (std::set<taxid_t>::iterator it = ancestor.begin(); it != ancestor.end(); it++)
         {
             auto code = *it;
             if (temp.find(code) != temp.end())
             {
-                vector<uint64_t> kmers = temp[code];
+                vector<uint64_t> &kmers = temp[code];
                 for (size_t i = 0; i < kmers.size(); i++)
                 {
                     AddMinimizer(kmers[i]);
@@ -113,6 +116,7 @@ namespace kraken2
     {
         return conflict_ump.size();
     }
+
     //对于未识别来说
 
     void AdditionalMap::ReadAdditionalFile(const char *filename)
