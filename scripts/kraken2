@@ -50,7 +50,7 @@ my $use_mpa_style = 0;
 my $report_zero_counts = 0;
 my $minimum_hit_groups = 2;
 my $report_minimizer_data = 0;
-my $keep_map = 1;
+my $keep_map = 0;
 
 GetOptions(
   "help" => \&display_help,
@@ -188,7 +188,7 @@ if ($compressed) {
   }
   @ARGV = @replacement_ARGV;
 }
-
+ 
 if ($keep_map) {
   exec $SEARCH_PHASE, @flags, @ARGV;
 die "$PROG: exec error: $!\n";

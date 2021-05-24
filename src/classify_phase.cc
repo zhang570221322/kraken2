@@ -66,6 +66,7 @@ struct ClassificationStats
   uint64_t total_sequences;
   uint64_t total_bases;
   uint64_t total_classified;
+  uint64_t total_conflict;
 };
 
 struct OutputStreamData
@@ -99,14 +100,12 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                          KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
                          Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
                          vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-                         vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap &add_map);
-void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
-                      Taxonomy &taxonomy);
-taxid_t ResolveTree(taxon_counts_t &hit_counts,
-                    Taxonomy &tax, size_t total_minimizers, Options &opts, AdditionalMap &add_map, ostringstream &koss);
-void ReportStats(struct timeval time1, struct timeval time2,
-                 ClassificationStats &stats);
-void InitializeOutputs(Options &opts, OutputStreamData &outputs, SequenceFormat format);
+                         vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap &add_map,
+                         unordered_map<taxid_t, vector<uint64_t>> &thread_conflict_temp, set<taxid_t> &thread_conflict_ancestor);
+taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &tax, size_t total_minimizers, Options &opts, AdditionalMap &add_map, ostringstream &koss,
+                    set<taxid_t> &thread_conflict_ancestor, unordered_map<taxid_t, vector<uint64_t>> &thread_conflict_temp, ClassificationStats &stats);
+void ReportStats(struct timeval time1, struct timeval time2, ClassificationStats &stats);
+
 void MaskLowQualityBases(Sequence &dna, int minimum_quality_score);
 
 int main(int argc, char **argv)
@@ -130,9 +129,7 @@ int main(int argc, char **argv)
   ParseCommandLine(argc, argv, opts);
 
   omp_set_num_threads(opts.num_threads);
-  cerr << "Create/update conflict hash map" << endl;
-  cerr << "Loading database information..." << endl;
-
+  cerr << "Create/update conflict hash map." << endl;
   IndexOptions idx_opts = {0};
   ifstream idx_opt_fs(opts.options_filename);
   struct stat sb;
@@ -144,13 +141,13 @@ int main(int argc, char **argv)
 
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
-
+  cerr << "Loading database information..." << endl;
   cerr << "Loading additional hashmap..." << endl;
   AdditionalMap add_map;
   add_map.ReadConflictFile(opts.conflict_filename.c_str());
-  cerr << " done." << endl;
-  cerr << " Exec classify_phase." << endl;
-  ClassificationStats stats = {0, 0, 0};
+  cerr << "Loaded to memory successfully." << endl;
+  cerr << "Exec classification conflict analysis." << endl;
+  ClassificationStats stats = {0, 0, 0, 0};
 
   OutputStreamData outputs = {false, false, nullptr, nullptr, nullptr, nullptr, &std::cout};
 
@@ -182,27 +179,11 @@ int main(int argc, char **argv)
     }
   }
   gettimeofday(&tv2, nullptr);
-  cerr << "Write conflict kmer into " << opts.conflict_filename.c_str() << add_map.GetConflictSize() << endl;
+  cerr << "\nWrite conflict kmer into " << opts.conflict_filename.c_str() << " (" << add_map.GetConflictSize() << ")" << endl;
   add_map.WriteConflictMap(opts.conflict_filename.c_str());
 
   delete hash_ptr;
-
   ReportStats(tv1, tv2, stats);
-
-  if (!opts.report_filename.empty())
-  {
-    if (opts.mpa_style_report)
-      ReportMpaStyle(opts.report_filename, opts.report_zero_counts, taxonomy,
-                     taxon_counters);
-    else
-    {
-      auto total_unclassified = stats.total_sequences - stats.total_classified;
-      ReportKrakenStyle(opts.report_filename, opts.report_zero_counts,
-                        opts.report_kmer_data, taxonomy,
-                        taxon_counters, stats.total_sequences, total_unclassified);
-    }
-  }
-
   return 0;
 }
 
@@ -220,25 +201,17 @@ void ReportStats(struct timeval time1, struct timeval time2,
   seconds /= 1e6;
   seconds += time2.tv_sec;
 
-  uint64_t total_unclassified = stats.total_sequences - stats.total_classified;
-
   if (isatty(fileno(stderr)))
     cerr << "\r";
   fprintf(stderr,
-          "%llu sequences (%.2f Mbp) processed in %.3fs (%.1f Kseq/m, %.2f Mbp/m).\n",
+          "%llu sequences (%.2f Mbp) (Find conflicts %lu)  processed in %.3fs (%.1f Kseq/m, %.2f Mbp/m).  \n",
           (unsigned long long)stats.total_sequences,
           stats.total_bases / 1.0e6,
+          stats.total_conflict,
           seconds,
           stats.total_sequences / 1.0e3 / (seconds / 60),
           stats.total_bases / 1.0e6 / (seconds / 60));
-  fprintf(stderr, "  %llu sequences classified (%.2f%%)\n",
-          (unsigned long long)stats.total_classified,
-          stats.total_classified * 100.0 / stats.total_sequences);
-  fprintf(stderr, "  %llu sequences unclassified (%.2f%%)\n",
-          (unsigned long long)total_unclassified,
-          total_unclassified * 100.0 / stats.total_sequences);
 }
-
 void ProcessFiles(const char *filename1, const char *filename2,
                   KeyValueStore *hash, Taxonomy &tax,
                   IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
@@ -285,12 +258,15 @@ void ProcessFiles(const char *filename1, const char *filename2,
     uint64_t block_id;
     OutputData out_data;
     taxon_counters_t thread_taxon_counters;
-    //暂时单线程
+    //多线程添加冲突
+    unordered_map<taxid_t, vector<uint64_t>> thread_conflict_temp;
+    set<taxid_t> thread_conflict_ancestor;
+
     while (true)
     {
       thread_stats.total_sequences = 0;
       thread_stats.total_bases = 0;
-      thread_stats.total_classified = 0;
+      thread_stats.total_conflict = 0;
 
       auto ok_read = false;
 
@@ -349,28 +325,11 @@ void ProcessFiles(const char *filename1, const char *filename2,
           if (opts.paired_end_processing)
             MaskLowQualityBases(seq2, opts.minimum_quality_score);
         }
-        auto call = ClassifySequence(seq1, seq2,
-                                     kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-                                     taxa, hit_counts, translated_frames, thread_taxon_counters, add_map);
-        if (call)
-        {
-          char buffer[1024] = "";
-          sprintf(buffer, " kraken:taxid|%llu",
-                  (unsigned long long)tax.nodes()[call].external_id);
-          seq1.header += buffer;
-          c1_oss << seq1.to_string();
-          if (opts.paired_end_processing)
-          {
-            seq2.header += buffer;
-            c2_oss << seq2.to_string();
-          }
-        }
-        else
-        {
-          u1_oss << seq1.to_string();
-          if (opts.paired_end_processing)
-            u2_oss << seq2.to_string();
-        }
+        ClassifySequence(seq1, seq2,
+                         kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
+                         taxa, hit_counts, translated_frames, thread_taxon_counters, add_map,
+                         thread_conflict_temp, thread_conflict_ancestor);
+
         thread_stats.total_bases += seq1.seq.size();
         if (opts.paired_end_processing)
           thread_stats.total_bases += seq2.seq.size();
@@ -381,18 +340,13 @@ void ProcessFiles(const char *filename1, const char *filename2,
 #pragma omp atomic
       stats.total_bases += thread_stats.total_bases;
 #pragma omp atomic
-      stats.total_classified += thread_stats.total_classified;
-
+      stats.total_conflict += thread_stats.total_conflict;
 #pragma omp critical(output_stats)
       {
         if (isatty(fileno(stderr)))
           cerr << "\rProcessed " << stats.total_sequences
-               << " sequences (" << stats.total_bases << " bp) ...";
-      }
-
-      if (!outputs.initialized)
-      {
-        InitializeOutputs(opts, outputs, reader1.file_format());
+               << " sequences (" << stats.total_bases << " bp) "
+               << " conflicts (" << stats.total_conflict << " times) ... ";
       }
 
       out_data.block_id = block_id;
@@ -469,13 +423,12 @@ void ProcessFiles(const char *filename1, const char *filename2,
     (*outputs.unclassified_output2) << std::flush;
 }
 
-taxid_t ResolveTree(taxon_counts_t &hit_counts,
-                    Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &add_map, ostringstream &koss)
+taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &add_map,
+                    ostringstream &koss, set<taxid_t> &thread_conflict_ancestor, unordered_map<taxid_t, vector<uint64_t>> &thread_conflict_temp, ClassificationStats &stats)
 {
   taxid_t max_taxon = 0;
   float max_score = 0;
-  uint32_t required_score = ceil(opts.confidence_threshold * total_minimizers);
-  add_map.clearAncestor();
+
   // Sum each taxon's LTR path, find taxon with highest LTR score
   for (auto &kv_pair : hit_counts)
   {
@@ -488,7 +441,7 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts,
 
       if (taxonomy.IsAAncestorOfB(taxon2, taxon))
       {
-        add_map.AddAncestor(taxon2);
+        thread_conflict_ancestor.insert(taxon2);
         score += kv_pair2.second;
       }
     }
@@ -500,64 +453,32 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts,
     }
     else if (labs(score - max_score) <= max_score / 10.0)
     {
-      // 达到阈值,写入所有的冲突kmer
-
-      add_map.saveTemp();
+      stats.total_conflict += 1;
       max_taxon = taxonomy.LowestCommonAncestor(max_taxon, taxon);
-    }
-  }
-
-  // Reset max. score to be only hits at the called taxon
-  max_score = hit_counts[max_taxon];
-  // We probably have a call w/o required support (unless LCA resolved tie)
-  while (max_taxon && max_score < required_score)
-  {
-    max_score = 0;
-    for (auto &kv_pair : hit_counts)
-    {
-      taxid_t taxon = kv_pair.first;
-      // Add to score if taxon in max_taxon's clade
-      if (taxonomy.IsAAncestorOfB(max_taxon, taxon))
+      // 达到阈值,写入所有的冲突kmer
+#pragma omp critical(save_temp)
       {
-        max_score += kv_pair.second;
+        add_map.saveTemp(thread_conflict_temp, thread_conflict_ancestor);
       }
     }
-    // Score is now sum of hits at max_taxon and w/in max_taxon clade
-    if (max_score >= required_score)
-      // Kill loop and return, we've got enough support here
-      return max_taxon;
-    else
-      // Run up tree until confidence threshold is met
-      // Run off tree if required score isn't met
-      max_taxon = taxonomy.nodes()[max_taxon].parent_id;
   }
 
   return max_taxon;
 }
 
-std::string TrimPairInfo(std::string &id)
-{
-  size_t sz = id.size();
-  if (sz <= 2)
-    return id;
-  if (id[sz - 2] == '/' && (id[sz - 1] == '1' || id[sz - 1] == '2'))
-    return id.substr(0, sz - 2);
-  return id;
-}
-
 taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                          KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
                          Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
-                         vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-                         vector<string> &tx_frames,
-                         taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map)
+                         vector<taxid_t> &taxa, taxon_counts_t &hit_counts, vector<string> &tx_frames,
+                         taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map,
+                         unordered_map<taxid_t, vector<uint64_t>> &thread_conflict_temp, set<taxid_t> &thread_conflict_ancestor)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
   taxa.clear();
   hit_counts.clear();
   // 清除临时数组
-  add_map.clearTemp();
+  thread_conflict_temp.clear();
   auto frame_ct = opts.use_translated_search ? 6 : 1;
   int64_t minimizer_hit_groups = 0;
 
@@ -583,10 +504,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
       }
       uint64_t last_minimizer = UINT64_MAX;
       taxid_t last_taxon = TAXID_MAX;
-      uint16_t last_weight = 1;
+
       while ((minimizer_ptr = scanner.NextMinimizer()) != nullptr)
       {
-        uint16_t weight;
+
         taxid_t taxon;
         if (scanner.is_ambiguous())
         {
@@ -603,16 +524,14 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                 skip_lookup = true;
             }
             taxon = 0;
-            weight = 1;
+
             if (!skip_lookup)
             {
               taxon = hash->Get(*minimizer_ptr);
-              if (add_map.GetConflictSize() != 0)
-                weight = add_map.GetWeight(*minimizer_ptr);
             }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
-            last_weight = weight;
+
             // Increment this only if (a) we have DB hit and
             // (b) minimizer != last minimizer
             if (taxon)
@@ -623,7 +542,8 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               // 命中为非leaf的kmer,将其添加到temp.
               // if (!taxonomy.nodes()[taxon].child_count)
               // {
-              add_map.addk_v2Temp(taxon, last);
+              thread_conflict_temp[taxon].push_back(last);
+
               // }
               curr_taxon_counts[taxon].add_kmer(last);
             }
@@ -631,7 +551,6 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
           else
           {
             taxon = last_taxon;
-            weight = last_weight;
           }
           if (taxon)
           {
@@ -640,7 +559,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               call = taxon;
               goto finished_searching; // need to break 3 loops here
             }
-            hit_counts[taxon] += weight;
+            hit_counts[taxon] += 1;
           }
         }
         taxa.push_back(taxon);
@@ -659,180 +578,9 @@ finished_searching:
     total_kmers--;                // account for the mate pair marker
   if (opts.use_translated_search) // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
-  // 添加一个参数curr_taxon_counts, 用于处理权重
-
-  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss);
-  // Void a call made by too few minimizer groups
-  if (call && minimizer_hit_groups < opts.minimum_hit_groups)
-    call = 0;
-
-  if (call)
-  {
-    stats.total_classified++;
-    curr_taxon_counts[call].incrementReadCount();
-  }
-
-  if (call)
-    koss << "C\t";
-  else
-    koss << "U\t";
-  if (!opts.paired_end_processing)
-    koss << dna.id << "\t";
-  else
-    koss << TrimPairInfo(dna.id) << "\t";
-
-  auto ext_call = taxonomy.nodes()[call].external_id;
-  if (opts.print_scientific_name)
-  {
-    const char *name = nullptr;
-    if (call)
-    {
-      name = taxonomy.name_data() + taxonomy.nodes()[call].name_offset;
-    }
-    koss << (name ? name : "unclassified") << " (taxid " << ext_call << ")";
-  }
-  else
-  {
-    koss << ext_call;
-  }
-
-  koss << "\t";
-  if (!opts.paired_end_processing)
-    koss << dna.seq.size() << "\t";
-  else
-    koss << dna.seq.size() << "|" << dna2.seq.size() << "\t";
-
-  if (opts.quick_mode)
-  {
-    koss << ext_call << ":Q";
-  }
-  else
-  {
-    if (taxa.empty())
-      koss << "0:0";
-    else
-      AddHitlistString(koss, taxa, taxonomy);
-  }
-
-  koss << endl;
+  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss, thread_conflict_ancestor, thread_conflict_temp, stats);
 
   return call;
-}
-
-void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
-                      Taxonomy &taxonomy)
-{
-  auto last_code = taxa[0];
-  auto code_count = 1;
-
-  for (size_t i = 1; i < taxa.size(); i++)
-  {
-    auto code = taxa[i];
-
-    if (code == last_code)
-    {
-      code_count += 1;
-    }
-    else
-    {
-      if (last_code != MATE_PAIR_BORDER_TAXON && last_code != READING_FRAME_BORDER_TAXON)
-      {
-        if (last_code == AMBIGUOUS_SPAN_TAXON)
-        {
-          oss << "A:" << code_count << " ";
-        }
-        else
-        {
-          auto ext_code = taxonomy.nodes()[last_code].external_id;
-          oss << ext_code << ":" << code_count << " ";
-        }
-      }
-      else
-      { // mate pair/reading frame marker
-        oss << (last_code == MATE_PAIR_BORDER_TAXON ? "|:| " : "-:- ");
-      }
-      code_count = 1;
-      last_code = code;
-    }
-  }
-  if (last_code != MATE_PAIR_BORDER_TAXON && last_code != READING_FRAME_BORDER_TAXON)
-  {
-    if (last_code == AMBIGUOUS_SPAN_TAXON)
-    {
-      oss << "A:" << code_count << " ";
-    }
-    else
-    {
-      auto ext_code = taxonomy.nodes()[last_code].external_id;
-      oss << ext_code << ":" << code_count;
-    }
-  }
-  else
-  { // mate pair/reading frame marker
-    oss << (last_code == MATE_PAIR_BORDER_TAXON ? "|:|" : "-:-");
-  }
-}
-
-void InitializeOutputs(Options &opts, OutputStreamData &outputs, SequenceFormat format)
-{
-#pragma omp critical(output_init)
-  {
-    if (!outputs.initialized)
-    {
-      if (!opts.classified_output_filename.empty())
-      {
-        if (opts.paired_end_processing)
-        {
-          vector<string> fields = SplitString(opts.classified_output_filename, "#", 3);
-          if (fields.size() < 2)
-          {
-            errx(EX_DATAERR, "Paired filename format missing # character: %s",
-                 opts.classified_output_filename.c_str());
-          }
-          else if (fields.size() > 2)
-          {
-            errx(EX_DATAERR, "Paired filename format has >1 # character: %s",
-                 opts.classified_output_filename.c_str());
-          }
-          outputs.classified_output1 = new ofstream(fields[0] + "_1" + fields[1]);
-          outputs.classified_output2 = new ofstream(fields[0] + "_2" + fields[1]);
-        }
-        else
-          outputs.classified_output1 = new ofstream(opts.classified_output_filename);
-        outputs.printing_sequences = true;
-      }
-      if (!opts.unclassified_output_filename.empty())
-      {
-        if (opts.paired_end_processing)
-        {
-          vector<string> fields = SplitString(opts.unclassified_output_filename, "#", 3);
-          if (fields.size() < 2)
-          {
-            errx(EX_DATAERR, "Paired filename format missing # character: %s",
-                 opts.unclassified_output_filename.c_str());
-          }
-          else if (fields.size() > 2)
-          {
-            errx(EX_DATAERR, "Paired filename format has >1 # character: %s",
-                 opts.unclassified_output_filename.c_str());
-          }
-          outputs.unclassified_output1 = new ofstream(fields[0] + "_1" + fields[1]);
-          outputs.unclassified_output2 = new ofstream(fields[0] + "_2" + fields[1]);
-        }
-        else
-          outputs.unclassified_output1 = new ofstream(opts.unclassified_output_filename);
-        outputs.printing_sequences = true;
-      }
-      if (!opts.kraken_output_filename.empty())
-      {
-        if (opts.kraken_output_filename == "-") // Special filename to silence Kraken output
-          outputs.kraken_output = nullptr;
-        else
-          outputs.kraken_output = new ofstream(opts.kraken_output_filename);
-      }
-      outputs.initialized = true;
-    }
-  }
 }
 
 void MaskLowQualityBases(Sequence &dna, int minimum_quality_score)

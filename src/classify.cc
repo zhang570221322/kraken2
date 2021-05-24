@@ -99,13 +99,11 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                          KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
                          Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
                          vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-                         vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap add_map);
-void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
-                      Taxonomy &taxonomy);
-taxid_t ResolveTree(taxon_counts_t &hit_counts,
-                    Taxonomy &tax, size_t total_minimizers, Options &opts);
-void ReportStats(struct timeval time1, struct timeval time2,
-                 ClassificationStats &stats);
+                         vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap &add_map);
+void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa, Taxonomy &taxonomy);
+taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &tax, size_t total_minimizers,
+                    Options &opts, AdditionalMap &add_map, ostringstream &koss);
+void ReportStats(struct timeval time1, struct timeval time2, ClassificationStats &stats);
 void InitializeOutputs(Options &opts, OutputStreamData &outputs, SequenceFormat format);
 void MaskLowQualityBases(Sequence &dna, int minimum_quality_score);
 
@@ -130,8 +128,7 @@ int main(int argc, char **argv)
   ParseCommandLine(argc, argv, opts);
 
   omp_set_num_threads(opts.num_threads);
-  cerr << "Create/update conflict hash map" << endl;
-  cerr << "Loading database information...";
+  cerr << "Loading database information..." << endl;
 
   IndexOptions idx_opts = {0};
   ifstream idx_opt_fs(opts.options_filename);
@@ -148,8 +145,8 @@ int main(int argc, char **argv)
   cerr << "Loading additional hashmap..." << endl;
   AdditionalMap add_map;
   add_map.ReadConflictFile(opts.conflict_filename.c_str());
-  cerr << " done." << endl;
-  cerr << " Exec classify." << endl;
+  cerr << "Loaded to memory successfully." << endl;
+  cerr << "Exec classify." << endl;
   ClassificationStats stats = {0, 0, 0};
 
   OutputStreamData outputs = {false, false, nullptr, nullptr, nullptr, nullptr, &std::cout};
@@ -182,6 +179,8 @@ int main(int argc, char **argv)
     }
   }
   gettimeofday(&tv2, nullptr);
+
+  add_map.WriteConflictMap(opts.conflict_filename.c_str());
 
   delete hash_ptr;
 
@@ -467,13 +466,13 @@ void ProcessFiles(const char *filename1, const char *filename2,
     (*outputs.unclassified_output2) << std::flush;
 }
 
-taxid_t ResolveTree(taxon_counts_t &hit_counts,
-                    Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap add_map, ostringstream &koss)
+taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &add_map,
+                    ostringstream &koss)
 {
   taxid_t max_taxon = 0;
   float max_score = 0;
   uint32_t required_score = ceil(opts.confidence_threshold * total_minimizers);
-  vector<taxid_t> ancestor;
+
   // Sum each taxon's LTR path, find taxon with highest LTR score
   for (auto &kv_pair : hit_counts)
   {
@@ -486,7 +485,7 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts,
 
       if (taxonomy.IsAAncestorOfB(taxon2, taxon))
       {
-        ancestor.push_back(taxon2);
+
         score += kv_pair2.second;
       }
     }
@@ -496,9 +495,8 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts,
       max_score = score;
       max_taxon = taxon;
     }
-    else if (labs(score - max_score) <= max_score / 5.0)
+    else if (labs(score - max_score) <= max_score / 10.0)
     {
-
       max_taxon = taxonomy.LowestCommonAncestor(max_taxon, taxon);
     }
   }
@@ -544,9 +542,8 @@ std::string TrimPairInfo(std::string &id)
 taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                          KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
                          Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
-                         vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-                         vector<string> &tx_frames,
-                         taxon_counters_t &curr_taxon_counts, AdditionalMap add_map)
+                         vector<taxid_t> &taxa, taxon_counts_t &hit_counts, vector<string> &tx_frames,
+                         taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
@@ -615,7 +612,6 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               minimizer_hit_groups++;
               // New minimizer should trigger registering minimizer in RC/HLL
               auto last = scanner.last_minimizer();
-
               curr_taxon_counts[taxon].add_kmer(last);
             }
           }
@@ -631,7 +627,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               call = taxon;
               goto finished_searching; // need to break 3 loops here
             }
-            hit_counts[taxon] += 1.0 / weight;
+            hit_counts[taxon] += weight;
           }
         }
         taxa.push_back(taxon);
@@ -651,6 +647,7 @@ finished_searching:
   if (opts.use_translated_search) // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
   // 添加一个参数curr_taxon_counts, 用于处理权重
+
   call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss);
   // Void a call made by too few minimizer groups
   if (call && minimizer_hit_groups < opts.minimum_hit_groups)

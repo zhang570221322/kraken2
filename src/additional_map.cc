@@ -35,7 +35,8 @@ namespace kraken2
                 istringstream linestream(line);
                 linestream >> key >> value;
 
-                AddWeight(key, value);
+                conflict_ump.emplace(key, value);
+                ;
             }
         }
         else if (!ifile.is_open())
@@ -86,29 +87,16 @@ namespace kraken2
         }
         else
         {
-            AddWeight(minimizer, defalut_weight);
+            conflict_ump.emplace(minimizer, defalut_weight);
         }
     }
 
-    void AdditionalMap::AddWeight(uint64_t minimizer, uint16_t weight)
+    // 持久化,将临时的temp,但是对于多线程必须是串行进行的.
+    void AdditionalMap::saveTemp(unordered_map<taxid_t, vector<uint64_t>> &temp, set<taxid_t> &ancestor)
     {
-        conflict_ump.emplace(minimizer, weight);
-    }
-    void AdditionalMap::clearTemp()
-    {
-
-        temp.clear();
-    }
-
-    void AdditionalMap::addk_v2Temp(taxid_t taxon, uint64_t minimizer)
-    {
-        temp[taxon].push_back(minimizer);
-    }
-    void AdditionalMap::saveTemp()
-    {
-        for (size_t i = 0; i < ancestor.size(); i++)
+        for (std::set<taxid_t>::iterator it = ancestor.begin(); it != ancestor.end(); it++)
         {
-            auto code = ancestor[i];
+            auto code = *it;
             if (temp.find(code) != temp.end())
             {
                 vector<uint64_t> kmers = temp[code];
@@ -118,21 +106,12 @@ namespace kraken2
                 }
             }
         }
-        clearTemp();
+        ancestor.clear();
     }
 
     size_t AdditionalMap::GetConflictSize()
     {
         return conflict_ump.size();
-    }
-
-    void AdditionalMap::AddAncestor(taxid_t taxa)
-    {
-        ancestor.push_back(taxa);
-    }
-    void AdditionalMap::clearAncestor()
-    {
-        ancestor.clear();
     }
     //对于未识别来说
 
