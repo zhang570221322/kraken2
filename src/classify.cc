@@ -142,7 +142,7 @@ int main(int argc, char **argv)
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
 
-  cerr << "Loading additional hashmap..." << endl;
+  cerr << "Loading conflict hashmap..." << endl;
   AdditionalMap add_map;
   add_map.ReadConflictFile(opts.conflict_filename.c_str());
   cerr << "Loaded to memory successfully." << endl;
@@ -470,14 +470,14 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
                     ostringstream &koss)
 {
   taxid_t max_taxon = 0;
-  float max_score = 0;
+  double max_score = 0;
   uint32_t required_score = ceil(opts.confidence_threshold * total_minimizers);
 
   // Sum each taxon's LTR path, find taxon with highest LTR score
   for (auto &kv_pair : hit_counts)
   {
     taxid_t taxon = kv_pair.first;
-    float score = 0;
+    double score = 0;
 
     for (auto &kv_pair2 : hit_counts)
     {
@@ -495,7 +495,8 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
       max_score = score;
       max_taxon = taxon;
     }
-    else if (labs(score - max_score) <= max_score / 10.0)
+    // else if (labs(score - max_score) <= max_score / 30.0)
+    else if (score == max_score)
     {
       max_taxon = taxonomy.LowestCommonAncestor(max_taxon, taxon);
     }
@@ -646,7 +647,6 @@ finished_searching:
     total_kmers--;                // account for the mate pair marker
   if (opts.use_translated_search) // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
-  // 添加一个参数curr_taxon_counts, 用于处理权重
 
   call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss);
   // Void a call made by too few minimizer groups

@@ -18,23 +18,55 @@ namespace kraken2
         return pFile.peek() == ifstream::traits_type::eof();
     }
 
+    void AdditionalMap::loadGod_data(const char *filename)
+    {
+        ifstream ifile(filename);
+
+        if (ifile.is_open() && !isFileEmpty(ifile))
+        {
+            while (!ifile.eof())
+            {
+                string line;
+                string seqID;
+                string empty;
+                taxid_t taxID;
+                getline(ifile, line);
+                istringstream linestream(line);
+                linestream >> seqID >> empty >> taxID;
+                _seqID_taxID.emplace(seqID, taxID);
+            }
+        }
+        else if (!ifile.is_open())
+        {
+            ofstream outfile(filename);
+            outfile << "";
+            outfile.close();
+        }
+        ifile.close();
+    }
+
+    void AdditionalMap::clearConflictObj()
+    {
+        conflict_ump.clear();
+        conflict_temp.clear();
+        conflict_ancestor.clear();
+        leaf.clear();
+        score_taxid.clear();
+    }
     void AdditionalMap::ReadConflictFile(const char *filename)
     {
         ifstream ifile(filename);
 
         if (ifile.is_open() && !isFileEmpty(ifile))
         {
-
             while (!ifile.eof())
             {
                 string line;
                 uint64_t key;
                 taxid_t value;
-
                 getline(ifile, line);
                 istringstream linestream(line);
                 linestream >> key >> value;
-
                 conflict_ump.emplace(key, value);
                 ;
             }
@@ -45,7 +77,6 @@ namespace kraken2
             outfile << "";
             outfile.close();
         }
-
         ifile.close();
     }
     void AdditionalMap::WriteConflictMap(const char *filename)
@@ -61,7 +92,6 @@ namespace kraken2
                     ofile << "\n";
                 }
             }
-
             ofile.close();
         }
     }
@@ -74,7 +104,7 @@ namespace kraken2
         {
             weight = conflict_ump[minimizer];
         }
-        return 1.0 / (0.81 + 0.05 * weight * weight);
+        return 1.0 / (0.81 + 0.05 * weight);
     }
 
     void AdditionalMap::AddMinimizer(uint64_t minimizer)
@@ -84,7 +114,6 @@ namespace kraken2
         //如果已经存在次数,再继续提升次数
         if (conflict_ump.find(minimizer) != conflict_ump.end())
         {
-
             conflict_ump[minimizer] = 1 + conflict_ump[minimizer];
         }
         else
@@ -92,24 +121,68 @@ namespace kraken2
             conflict_ump.emplace(minimizer, defalut_weight);
         }
     }
-
-    // 持久化,将临时的temp,但是对于多线程必须是串行进行的.
-    void AdditionalMap::saveTemp(unordered_map<taxid_t, vector<uint64_t>> &temp, set<taxid_t> &ancestor)
+    // Func 寻找到冲突路径,将冲突路径上的taxid_t填充到thread_conflict_ancestor中
+    // 1.找到score_taxid的map中的较为相近的score对应的taxid_t
+    // 2.从hit_counts中找到taxid_t的祖先,填充到thread_conflict_ancestor中
+    void AdditionalMap::findConflictLTR(taxon_counts_t &hit_counts, double max_score, uint64_t &conflicts, Taxonomy &taxonomy)
     {
 
-        for (std::set<taxid_t>::iterator it = ancestor.begin(); it != ancestor.end(); it++)
+        for (auto &kv_pair1 : score_taxid)
         {
-            auto code = *it;
-            if (temp.find(code) != temp.end())
+
+            if (kv_pair1.first == max_score)
             {
-                vector<uint64_t> &kmers = temp[code];
+                vector<taxid_t> &taxons = kv_pair1.second;
+
+                if (taxons.size() > 1)
+                {
+                    conflicts += taxons.size();
+                    for (auto taxon : taxons)
+                    {
+                        leaf.push_back(taxon);
+                    }
+                }
+            }
+            else if (labs(kv_pair1.first - max_score) <= max_score / 20.0)
+            {
+                vector<taxid_t> &taxons = kv_pair1.second;
+                conflicts += taxons.size();
+                for (auto taxon : taxons)
+                {
+                    leaf.push_back(taxon);
+                }
+            }
+        }
+
+        for (auto &kv_pair2 : hit_counts)
+        {
+            taxid_t taxon2 = kv_pair2.first;
+            for (auto taxon : leaf)
+            {
+                if (taxonomy.IsAAncestorOfB(taxon2, taxon))
+                {
+                    conflict_ancestor.push_back(taxon2);
+                }
+            }
+        }
+    }
+    // 持久化,将临时的temp,但是对于多线程必须是串行进行的.
+    void AdditionalMap::saveTemp(taxon_counts_t &hit_counts, double max_score, uint64_t &conflicts, Taxonomy &taxonomy)
+    {
+        // 先计算出需要降低的tax,存入conflict_ancestor
+        findConflictLTR(hit_counts, max_score, conflicts, taxonomy);
+        for (auto &code : conflict_ancestor)
+        {
+
+            if (conflict_temp.find(code) != conflict_temp.end())
+            {
+                vector<uint64_t> &kmers = conflict_temp[code];
                 for (size_t i = 0; i < kmers.size(); i++)
                 {
                     AddMinimizer(kmers[i]);
                 }
             }
         }
-        ancestor.clear();
     }
 
     size_t AdditionalMap::GetConflictSize()

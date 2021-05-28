@@ -27,6 +27,7 @@ $ENV{"PATH"} = "$KRAKEN2_DIR:$ENV{PATH}";
 
 my $SEARCH_PHASE = "$KRAKEN2_DIR/classify_phase";
 my $CLASSIFY = "$KRAKEN2_DIR/classify";
+my $CLASSIFY_STATISTICS="$KRAKEN2_DIR/classify_statistics";
 my $GZIP_MAGIC = chr(hex "1f") . chr(hex "8b");
 my $BZIP2_MAGIC = "BZ";
 
@@ -189,13 +190,17 @@ if ($compressed) {
   @ARGV = @replacement_ARGV;
 }
  
+ 
 if ($keep_map) {
-  exec $SEARCH_PHASE, @flags, @ARGV;
+  exec  $SEARCH_PHASE, @flags, @ARGV;
 die "$PROG: exec error: $!\n";
-
-}else {exec $CLASSIFY, @flags, @ARGV;
+# 执行带统计信息的.
+}else {exec $CLASSIFY_STATISTICS, @flags, @ARGV;
 die "$PROG: exec error: $!\n";
 }
+# }else {exec $CLASSIFY, @flags, @ARGV;
+# die "$PROG: exec error: $!\n";
+# }
 
 
 sub usage {
