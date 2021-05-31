@@ -8,9 +8,12 @@
 #define KRAKEN2_UTILITIES_H_
 
 #include "kraken2_headers.h"
+
 #include "taxonomy.h"
 // Functions used by 2+ programs that I couldn't think of a better place for.
-
+const std::string species_types[] = {"species", "strain", "no rank", "subspecies", "subvariety", "species subgroup", "species group"};
+const std::string genus_types[] = {"genus", "subgenus"};
+const std::string others_types[] = {"root", "superkingdom", "kingdom", "phylum", "class", "subclass", , "order", "suborder", "family"};
 namespace kraken2
 {
 
@@ -23,11 +26,11 @@ namespace kraken2
   std::vector<std::string> SplitString(const std::string &str,
                                        const std::string &delim = "\t", const size_t max_fields = (size_t)-1);
 
-  bool IsSpecies(Taxonomy &tax, TaxonomyNode &node, std::unordered_map<std::string, uint64_t> &_seqID_taxID, std::string &seq_id);
+  bool IsSpecies(Taxonomy &tax, TaxonomyNode &node);
 
-  bool IsGenus(Taxonomy &tax, TaxonomyNode &node, std::unordered_map<std::string, uint64_t> &_seqID_taxID, std::string &seq_id);
+  bool IsGenus(Taxonomy &tax, TaxonomyNode &node);
 
-  bool IsOther(Taxonomy &tax, TaxonomyNode &node, std::unordered_map<std::string, uint64_t> &_seqID_taxID, std::string &seq_id);
+  bool IsOther(Taxonomy &tax, TaxonomyNode &node);
 }
 
 #endif

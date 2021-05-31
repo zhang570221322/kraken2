@@ -12,6 +12,8 @@ namespace kraken2
     {
 
     public:
+        // Test
+        set<string> rankSet;
         //金标准数据
         unordered_map<string, uint64_t> _seqID_taxID;
         void loadGod_data(const char *filename);

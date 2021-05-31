@@ -8,6 +8,7 @@
 
 using std::string;
 using std::vector;
+
 namespace kraken2
 {
 
@@ -52,43 +53,50 @@ namespace kraken2
     return output;
   }
 
-  bool IsSpecies(Taxonomy &tax, TaxonomyNode &node, std::unordered_map<std::string, uint64_t> &_seqID_taxID, std::string &seq_id)
+  bool IsSpecies(Taxonomy &tax, TaxonomyNode &node)
   {
     bool is_species = false;
+
     string rank = tax.rank_data() + node.rank_offset;
 
-    if (rank == "species" && node.external_id == _seqID_taxID[seq_id])
+    for (string species_type : species_types)
     {
-      is_species = true;
+      if (rank == species_type)
+      {
+        is_species = true;
+        break;
+      }
     }
 
     return is_species;
   }
 
-  bool IsGenus(Taxonomy &tax, TaxonomyNode &node, std::unordered_map<std::string, uint64_t> &_seqID_taxID, std::string &seq_id)
+  bool IsGenus(Taxonomy &tax, TaxonomyNode &genus_node)
   {
     bool is_genus = false;
-    string rank = tax.rank_data() + node.rank_offset;
-
-    if (rank == "genus")
+    string rank = tax.rank_data() + genus_node.rank_offset;
+    for (string genus_type : genus_types)
     {
-      is_genus = true;
+      if (rank == genus_type)
+      {
+        is_genus = true;
+      }
     }
-
     return is_genus;
   }
 
-  bool IsOther(Taxonomy &tax, TaxonomyNode &node, std::unordered_map<std::string, uint64_t> &_seqID_taxID, std::string &seq_id)
+  bool IsOther(Taxonomy &tax, TaxonomyNode &node)
   {
     bool is_other = false;
     string rank = tax.rank_data() + node.rank_offset;
-
-    if (rank == "root" || rank == "superkingdom" || rank == "kingdom" || rank == "phylum" || rank == "class" || rank == "order" || rank == "family")
+    for (string others_type : others_types)
     {
-      is_other = true;
+      if (rank == others_type)
+      {
+        is_other = true;
+        break;
+      }
     }
-
     return is_other;
   }
-
 }

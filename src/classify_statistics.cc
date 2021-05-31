@@ -153,6 +153,9 @@ int main(int argc, char **argv)
   // 加载金标准数据
   cerr << "Load gold standard data....";
   add_map.loadGod_data("/home/cszhang/workSpace/classification/refSeq/pipline2/testdata/data4/H_pooled_gsa_mapping.tsv");
+  // add_map.loadGod_data("/home/cszhang/workSpace/classification/refSeq/pipline2/testdata/data2/seqID_taxId.csv");
+  //生成外部ID至内部的Map.
+  taxonomy.GenerateExternalToInternalIDMap();
   cerr << "done." << endl;
 
   ClassificationStats stats = {0, 0, 0, 0, 0};
@@ -207,7 +210,12 @@ int main(int argc, char **argv)
                         taxon_counters, stats.total_sequences, total_unclassified);
     }
   }
-
+  // 测试数据 start
+  for (auto rank : add_map.rankSet)
+  {
+    cerr << rank << endl;
+  }
+  // 测试数据 end
   return 0;
 }
 
@@ -392,58 +400,25 @@ void ProcessFiles(const char *filename1, const char *filename2,
                   (unsigned long long)tax.nodes()[call].external_id);
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          // printf("%s的预测:%lu,真实:%lu\n", seq1.id.c_str(), node.external_id, add_map._seqID_taxID[seq1.id]);
-          bool found = false;
 
-          while (!found)
+          taxid_t realtaxo = add_map._seqID_taxID[seq1.id];
+          //   测试数据 start
+          string rank = tax.rank_data() + node.rank_offset;
+          add_map.rankSet.insert(rank);
+          // printf("%s的预测:%lu,真实:%lu\n", seq1.id.c_str(), node.external_id, realtaxo);
+          //   测试数据 end
+          bool isA = tax.IsAAncestorOfB(call, tax.GetInternalID(realtaxo));
+          // 预测的节点只有是真实节点的父亲或等于真实节点. 才算预成功.
+          if (isA)
           {
-
-            if (IsGenus(tax, node, add_map._seqID_taxID, seq1.id))
-            {
-
-              thread_stats.total_assegned_g++;
-              found = true;
-            }
-            else if (IsSpecies(tax, node, add_map._seqID_taxID, seq1.id))
+            if (IsSpecies(tax, node))
             {
               thread_stats.total_assegned_s++;
-
-              //search if is a child of a genus level taxId
-              bool has_genus = false;
-              while (!has_genus)
-              {
-                if (IsGenus(tax, node, add_map._seqID_taxID, seq1.id))
-                {
-                  thread_stats.total_assegned_g++;
-                  has_genus = true;
-                }
-                else if (IsOther(tax, node, add_map._seqID_taxID, seq1.id))
-                {
-                  has_genus = true;
-                }
-                else if (node.external_id == 0)
-                {
-                  has_genus = true;
-                }
-                else
-                {
-                  node = tax.nodes()[node.parent_id];
-                }
-              }
-
-              found = true;
+              thread_stats.total_assegned_g++;
             }
-            else if (IsOther(tax, node, add_map._seqID_taxID, seq1.id))
+            else if (IsGenus(tax, node))
             {
-              found = true;
-            }
-            else if (node.external_id == 0)
-            {
-              found = true;
-            }
-            else
-            {
-              node = tax.nodes()[node.parent_id];
+              thread_stats.total_assegned_g++;
             }
           }
 
