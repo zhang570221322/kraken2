@@ -154,8 +154,7 @@ int main(int argc, char **argv)
 
   // 加载金标准数据
   cerr << "Load gold standard data....";
-  add_map.loadGod_data("/home/cszhang/workSpace/classification/refSeq/pipline2/testdata/data4/H_pooled_gsa_mapping.tsv");
-  // add_map.loadGod_data("/home/cszhang/workSpace/classification/refSeq/pipline2/testdata/data2/seqID_taxId.csv");
+  add_map.loadGod_data("/data/home/wlzhang/classfication/data/gold_data/H_S001__insert_180_gs_read_mapping.tsv");
   //生成外部ID至内部的Map.
   taxonomy.GenerateExternalToInternalIDMap();
   cerr << "done." << endl;
@@ -313,7 +312,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
   // The priority queue for output is designed to ensure fragment data
   // is output in the same order it was input
-  auto comparator = [](const OutputData &a, const OutputData &b) {
+  auto comparator = [](const OutputData &a, const OutputData &b)
+  {
     return a.block_id > b.block_id;
   };
   std::priority_queue<OutputData, vector<OutputData>, decltype(comparator)>
@@ -417,8 +417,9 @@ void ProcessFiles(const char *filename1, const char *filename2,
                   (unsigned long long)tax.nodes()[call].external_id);
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-
-          taxid_t real_internal_taxo = tax.GetInternalID(add_map._seqID_taxID[seq1.id]);
+          // 双端文件,去除后面的/1,/2
+          string seq1_id = seq1.id.substr(0, seq1.id.size() - 2);
+          taxid_t real_internal_taxo = tax.GetInternalID(add_map._seqID_taxID[seq1_id]);
           //   测试数据 start
           string rank = tax.rank_data() + node.rank_offset;
           add_map.MyCounter1[rank] += 1;

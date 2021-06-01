@@ -11,9 +11,42 @@
 
 #include "taxonomy.h"
 // Functions used by 2+ programs that I couldn't think of a better place for.
-const std::string species_types[] = {"species", "strain", "no rank", "subspecies", "subvariety", "species subgroup", "species group"};
-const std::string genus_types[] = {"genus", "subgenus"};
-const std::string others_types[] = {"root", "superkingdom", "kingdom", "phylum", "class", "subclass", "order", "suborder", "family"};
+const std::string species_types[] = {
+    "species",
+    "subspecies",
+    "variety",
+    "subvariety",
+    "form",
+    "subform",
+    "strain",
+    "no rank",
+    "species subgroup",
+    "species group",
+    "forma specialis"};
+const std::string genus_types[] = {
+    "genus",
+    "subgenus",
+    "section",
+    "subsection",
+    "series",
+    "subseries"};
+const std::string others_types[] = {
+    "root",
+    "superkingdom",
+    "kingdom",
+    "subkingdom ",
+    "phylum",
+    "subphylum",
+    "class",
+    "subclass",
+    "superorder",
+    "order",
+    "suborder",
+    "family",
+    "subfamily",
+    "tribe",
+    "subtribe",
+    "biotype"};
 namespace kraken2
 {
 
