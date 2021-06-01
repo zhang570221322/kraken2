@@ -68,6 +68,8 @@ struct ClassificationStats
   uint64_t total_classified;
   uint64_t total_assegned_g; //number of reads assegned to rank genus
   uint64_t total_assegned_s; //number of reads assegned to rank species
+  uint64_t total_dberror;    //记录数据库错误
+  uint64_t total_error;      //记录错误
 };
 
 struct OutputStreamData
@@ -211,10 +213,12 @@ int main(int argc, char **argv)
     }
   }
   // 测试数据 start
-  for (auto rank : add_map.rankSet)
+  cerr << "All ranks:";
+  for (auto &kv_pair : add_map.MyCounter1)
   {
-    cerr << rank << endl;
+    cerr << kv_pair.first << ":" << kv_pair.second << " ";
   }
+  cerr << endl;
   // 测试数据 end
   return 0;
 }
@@ -260,9 +264,20 @@ void ReportStats(struct timeval time1, struct timeval time2,
   fprintf(stderr, "  %llu sequences classified (%.4f%%)\n",
           (unsigned long long)stats.total_classified,
           stats.total_classified * 100.0 / stats.total_sequences);
+  // 已分类的成分划分
+  fprintf(stderr, "    %llu sequences taxo is missing in current Taxonomy(%.4f%%)\n",
+          (unsigned long long)stats.total_dberror,
+          stats.total_dberror * 100.0 / stats.total_classified);
+  fprintf(stderr, "    %llu sequences is not properly classified(%.4f%%)\n",
+          (unsigned long long)stats.total_error,
+          stats.total_error * 100.0 / stats.total_classified);
+  fprintf(stderr, "    %llu sequences is properly classified under the genus level (%.4f%%)\n",
+          (unsigned long long)stats.total_assegned_g, 100.0 * recall_g);
+
   fprintf(stderr, "  %llu sequences unclassified (%.4f%%)\n\n",
           (unsigned long long)total_unclassified,
           total_unclassified * 100.0 / stats.total_sequences);
+
   fprintf(stderr, "GENUS LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at genus level.\n",
           (unsigned long long)stats.total_assegned_g);
@@ -331,6 +346,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
       thread_stats.total_classified = 0;
       thread_stats.total_assegned_g = 0;
       thread_stats.total_assegned_s = 0;
+      thread_stats.total_dberror = 0;
+      thread_stats.total_error = 0;
 
       auto ok_read = false;
 
@@ -401,14 +418,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
 
-          taxid_t realtaxo = add_map._seqID_taxID[seq1.id];
+          taxid_t real_internal_taxo = tax.GetInternalID(add_map._seqID_taxID[seq1.id]);
           //   测试数据 start
           string rank = tax.rank_data() + node.rank_offset;
-          add_map.rankSet.insert(rank);
+          add_map.MyCounter1[rank] += 1;
           // printf("%s的预测:%lu,真实:%lu\n", seq1.id.c_str(), node.external_id, realtaxo);
           //   测试数据 end
-          bool isA = tax.IsAAncestorOfB(call, tax.GetInternalID(realtaxo));
-          // 预测的节点只有是真实节点的父亲或等于真实节点. 才算预成功.
+          bool isA = tax.IsAAncestorOfB(call, real_internal_taxo);
+          // 预测的节点只有是真实节点的父亲或等于真实节点. 才算成功.
           if (isA)
           {
             if (IsSpecies(tax, node))
@@ -420,6 +437,18 @@ void ProcessFiles(const char *filename1, const char *filename2,
             {
               thread_stats.total_assegned_g++;
             }
+            else if (node.external_id == 0)
+            {
+              thread_stats.total_dberror++;
+            }
+          }
+          else if (real_internal_taxo)
+          {
+            thread_stats.total_error++;
+          }
+          else
+          {
+            thread_stats.total_dberror++;
           }
 
           /* <--- end added part ---> */
@@ -452,6 +481,10 @@ void ProcessFiles(const char *filename1, const char *filename2,
       stats.total_assegned_g += thread_stats.total_assegned_g;
 #pragma omp atomic
       stats.total_assegned_s += thread_stats.total_assegned_s;
+#pragma omp atomic
+      stats.total_dberror += thread_stats.total_dberror;
+#pragma omp atomic
+      stats.total_error += thread_stats.total_error;
 #pragma omp critical(output_stats)
       {
         if (isatty(fileno(stderr)))
