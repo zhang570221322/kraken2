@@ -543,9 +543,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               minimizer_hit_groups++;
               // New minimizer should trigger registering minimizer in RC/HLL
               auto last = scanner.last_minimizer();
-              // 命中为非leaf的kmer,将其添加到temp.
-              if (taxonomy.nodes()[taxon].child_count)
-                thread_add_map.conflict_temp[taxon].push_back(last);
+              thread_add_map.conflict_temp[taxon].push_back(last);
               curr_taxon_counts[taxon].add_kmer(last);
             }
           }

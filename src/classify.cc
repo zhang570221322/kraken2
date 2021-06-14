@@ -128,8 +128,9 @@ int main(int argc, char **argv)
   ParseCommandLine(argc, argv, opts);
 
   omp_set_num_threads(opts.num_threads);
-  cerr << "Loading database information..." << endl;
+  cerr << "Classify with conflict hash map" << endl;
 
+  cerr << "Loading database information...";
   IndexOptions idx_opts = {0};
   ifstream idx_opt_fs(opts.options_filename);
   struct stat sb;
@@ -141,12 +142,15 @@ int main(int argc, char **argv)
 
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
+  cerr << "done." << endl;
 
-  cerr << "Loading conflict hashmap..." << endl;
+  cerr << "Loading conflict hashmap...";
   AdditionalMap add_map;
   add_map.ReadConflictFile(opts.conflict_filename.c_str());
-  cerr << "Loaded to memory successfully." << endl;
+  cerr << "done." << endl;
+
   cerr << "Exec classify." << endl;
+
   ClassificationStats stats = {0, 0, 0};
 
   OutputStreamData outputs = {false, false, nullptr, nullptr, nullptr, nullptr, &std::cout};
@@ -257,7 +261,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
   // The priority queue for output is designed to ensure fragment data
   // is output in the same order it was input
-  auto comparator = [](const OutputData &a, const OutputData &b) {
+  auto comparator = [](const OutputData &a, const OutputData &b) 
+  {
     return a.block_id > b.block_id;
   };
   std::priority_queue<OutputData, vector<OutputData>, decltype(comparator)>
@@ -601,7 +606,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             {
               taxon = hash->Get(*minimizer_ptr);
               if (add_map.GetConflictSize() != 0)
-                weight = add_map.GetWeight(*minimizer_ptr);
+                weight = add_map.GetWeight(*minimizer_ptr,taxonomy.nodes()[taxon].child_count);
             }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
