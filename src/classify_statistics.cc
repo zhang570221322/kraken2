@@ -425,8 +425,18 @@ void ProcessFiles(const char *filename1, const char *filename2,
           add_map.MyCounter1[rank] += 1;
           // printf("%s的预测:%lu,真实:%lu\n", seq1.id.c_str(), node.external_id, realtaxo);
           //   测试数据 end
-          bool isA = tax.IsAAncestorOfB(call, real_internal_taxo);
-          // 预测的节点只有是真实节点的父亲或等于真实节点. 才算成功.
+
+          bool isA = true;
+          // 如果预测的call的值大于真实的值,判断call是否是真实的descendant
+          if (call > real_internal_taxo)
+          {
+            isA = tax.IsAAncestorOfB(call, real_internal_taxo);
+          }
+          else if (call > real_internal_taxo)
+          {
+            // 预测的节点只有是真实节点的父亲或等于真实节点. 才算成功.
+            isA = tax.IsAAncestorOfB(call, real_internal_taxo);
+          }
           if (isA)
           {
             if (IsSpecies(tax, node))
@@ -682,7 +692,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
       }
       uint64_t last_minimizer = UINT64_MAX;
       taxid_t last_taxon = TAXID_MAX;
-      double last_weight = 1;
+      double last_weight = 1.0;
       while ((minimizer_ptr = scanner.NextMinimizer()) != nullptr)
       {
         double weight;
