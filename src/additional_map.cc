@@ -95,16 +95,21 @@ namespace kraken2
             ofile.close();
         }
     }
-    double AdditionalMap::GetWeight(uint64_t minimizer)
-    //y =  1.0 / (0.81 + 0.1 * weight * weight);  X为这个kmer冲突次数
+    double AdditionalMap::GetWeight(uint64_t minimizer,uint64_t child_count)
+    //score = 1.05 - (0.05*x)-log(y),  X为这个kmer冲突次数,y为此taxo的子节点数, 
     {
         uint16_t weight = 1;
+      
 
         if (conflict_ump.find(minimizer) != conflict_ump.end())
         {
             weight = conflict_ump[minimizer];
         }
+ 
         return 1.0 / (0.81 + 0.05 * weight * weight);
+ 
+        // return 13.0 - 0.5*weight -log(child_count+1);
+ 
     }
 
     void AdditionalMap::AddMinimizer(uint64_t minimizer)

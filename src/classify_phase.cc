@@ -546,6 +546,8 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               // 命中为非leaf的kmer,将其添加到temp.LCA
               if (taxonomy.nodes()[taxon].child_count)
                 thread_add_map.conflict_temp[taxon].push_back(last);
+
+
               curr_taxon_counts[taxon].add_kmer(last);
             }
           }

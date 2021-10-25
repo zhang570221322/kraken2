@@ -143,6 +143,7 @@ int main(int argc, char **argv)
   auto opts_filesize = sb.st_size;
   idx_opt_fs.read((char *)&idx_opts, opts_filesize);
   opts.use_translated_search = !idx_opts.dna_db;
+  
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
   cerr << "done." << endl;
@@ -154,7 +155,7 @@ int main(int argc, char **argv)
 
   // 加载金标准数据
   cerr << "Load gold standard data....";
-  add_map.loadGod_data("/data/home/wlzhang/classfication/data/gold_data/H_S001__insert_180_gs_read_mapping.tsv");
+  add_map.loadGod_data("/home/wlzhang/classfication/CAMI/CAMI2/toy_dataset/CAMISIM_MOUSEGUT/19122017_mousegut_scaffolds/Gold.binning");
   //生成外部ID至内部的Map.
   taxonomy.GenerateExternalToInternalIDMap();
   cerr << "done." << endl;
@@ -717,7 +718,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             {
               taxon = hash->Get(*minimizer_ptr);
               if (add_map.GetConflictSize() != 0)
-                weight = add_map.GetWeight(*minimizer_ptr);
+                weight = add_map.GetWeight(*minimizer_ptr,taxonomy.nodes()[taxon].child_count);
             }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
