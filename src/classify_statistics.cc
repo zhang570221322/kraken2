@@ -134,6 +134,24 @@ int main(int argc, char **argv)
   omp_set_num_threads(opts.num_threads);
   cerr << "Classify with conflict hash map" << endl;
 
+  cerr << "Loading conflict hashmap...";
+  AdditionalMap add_map;
+  add_map.ReadConflictFile(opts.conflict_filename.c_str());
+  cerr << "done." << endl;
+
+  // 加载金标准数据
+  cerr << "Load gold standard data....";
+  std::string data_binning = argv[optind];
+  cerr << "done." << endl;
+  cerr << "Load gold binning data ";
+  data_binning.append(".binning");
+  cerr << data_binning.c_str();
+  cerr << "...done." << endl;
+  add_map.loadGod_data(data_binning.c_str());
+  //生成外部ID至内部的Map.
+  Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
+  taxonomy.GenerateExternalToInternalIDMap();
+
   cerr << "Loading database information...";
   IndexOptions idx_opts = {0};
   ifstream idx_opt_fs(opts.options_filename);
@@ -143,21 +161,8 @@ int main(int argc, char **argv)
   auto opts_filesize = sb.st_size;
   idx_opt_fs.read((char *)&idx_opts, opts_filesize);
   opts.use_translated_search = !idx_opts.dna_db;
-  
-  Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
+
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
-  cerr << "done." << endl;
-
-  cerr << "Loading conflict hashmap...";
-  AdditionalMap add_map;
-  add_map.ReadConflictFile(opts.conflict_filename.c_str());
-  cerr << "done." << endl;
-
-  // 加载金标准数据
-  cerr << "Load gold standard data....";
-  add_map.loadGod_data("/home/wlzhang/classfication/CAMI/CAMI2/toy_dataset/CAMISIM_MOUSEGUT/19122017_mousegut_scaffolds/Gold.binning");
-  //生成外部ID至内部的Map.
-  taxonomy.GenerateExternalToInternalIDMap();
   cerr << "done." << endl;
 
   ClassificationStats stats = {0, 0, 0, 0, 0};
@@ -418,26 +423,76 @@ void ProcessFiles(const char *filename1, const char *filename2,
                   (unsigned long long)tax.nodes()[call].external_id);
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          // 双端文件,去除后面的/1,/2
-          string seq1_id = seq1.id.substr(0, seq1.id.size() - 2);
+          string seq1_id = seq1.id;
           taxid_t real_internal_taxo = tax.GetInternalID(add_map._seqID_taxID[seq1_id]);
           //   测试数据 start
           string rank = tax.rank_data() + node.rank_offset;
           add_map.MyCounter1[rank] += 1;
-          // printf("%s的预测:%lu,真实:%lu\n", seq1.id.c_str(), node.external_id, realtaxo);
-          //   测试数据 end
 
+          // 测试数据 end
+          // break;
           bool isA = true;
-          // 如果预测的call的值大于真实的值,判断call是否是真实的descendant
-          if (call > real_internal_taxo)
+
+          //  call is the ancestor of real_internal_taxo
+          if (call <= real_internal_taxo)
           {
             isA = tax.IsAAncestorOfB(call, real_internal_taxo);
           }
-          else if (call > real_internal_taxo)
+          else
           {
-            // 预测的节点只有是真实节点的父亲或等于真实节点. 才算成功.
-            isA = tax.IsAAncestorOfB(call, real_internal_taxo);
+            //  real_internal_taxo is the ancestor of call
+            isA = tax.IsAAncestorOfB(real_internal_taxo, call);
           }
+          // if (add_map._seqID_taxID[seq1_id] == 645463)
+          // {
+          // cout << "预测" << endl;
+          // TaxonomyNode node_1 = tax.nodes()[call];
+          // cout << "内部节点" << call << "的linear是" << call;
+          // while (node_1.parent_id != 0)
+          // {
+          //   cout << "->" << node_1.parent_id;
+          //   node_1 = tax.nodes()[node_1.parent_id];
+          // }
+          // cout << endl;
+
+          // node_1 = tax.nodes()[call];
+          // cout << "外部节点" << node_1.external_id << "的linear是";
+          // while (node_1.parent_id != 0)
+          // {
+          //   cout << "->" << node_1.external_id;
+          //   node_1 = tax.nodes()[node_1.parent_id];
+          // }
+          // cout << endl;
+
+          // cout << "真实" << endl;
+
+          // node_1 = tax.nodes()[real_internal_taxo];
+          // cout << "内部节点" << real_internal_taxo << "的linear是" << real_internal_taxo;
+          // while (node_1.parent_id != 0)
+          // {
+          //   cout << "->" << node_1.parent_id;
+          //   node_1 = tax.nodes()[node_1.parent_id];
+          // }
+          // cout << endl;
+
+          // node_1 = tax.nodes()[real_internal_taxo];
+          // cout << "外部节点" << node_1.external_id << "的linear是";
+          // while (node_1.parent_id != 0)
+          // {
+          //   cout << "->" << node_1.external_id;
+          //   node_1 = tax.nodes()[node_1.parent_id];
+          // }
+          // cout << endl;
+          // bool isA_1 = true;
+          // cout << isA_1 << endl;
+          // isA_1 = tax.IsAAncestorOfB(call, real_internal_taxo);
+          // cout << isA_1 << endl;
+          // isA_1 = tax.IsAAncestorOfB(real_internal_taxo, call);
+          // cout << isA_1 << endl;
+          // printf("%s的预测:%lu,真实:%lu\n", seq1.id.c_str(), node.external_id, add_map._seqID_taxID[seq1_id]);
+          // printf("%s的预测:%lu,真实:%lu,is %lu\n", seq1.id.c_str(), call, real_internal_taxo, isA);
+          // }
+          // break;
           if (isA)
           {
             if (IsSpecies(tax, node))
@@ -718,7 +773,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             {
               taxon = hash->Get(*minimizer_ptr);
               if (add_map.GetConflictSize() != 0)
-                weight = add_map.GetWeight(*minimizer_ptr,taxonomy.nodes()[taxon].child_count);
+                weight = add_map.GetWeight(*minimizer_ptr, taxonomy.nodes()[taxon].child_count);
             }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
