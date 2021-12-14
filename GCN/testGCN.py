@@ -12,8 +12,7 @@ class Arg:
     batch_size = 64
 
 
-x, adj, y = torch.load(
-    "/data/home/wlzhang/classfication/software/kraken2/kraken2_weight/kraken2/GCN/test-data")
+x, adj, y = torch.load("./test-data")
 train_iter = [[x, adj, y]]
 arg = Arg()
 net = GCN(adj, 2, 220)
