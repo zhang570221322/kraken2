@@ -8,3 +8,4 @@ test/*
 *_bak*
 src/classify_phase
 classify_statistics
+__*
