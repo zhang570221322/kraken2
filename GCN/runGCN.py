@@ -2,6 +2,7 @@ from model import GCN
 import torch
 from torch import nn
 import random
+from handle_data import getdata, load_array
 random.seed(32)
 
 
@@ -14,11 +15,11 @@ class Arg:
 
 arg = Arg()
 device = torch.device('cuda:1')
+
 # data
 print("start to load data...")
-x, adj, y = torch.load("./test-data")
-train_data = test_data = (x, adj, y)
-train_iter = [[x, adj, y]]
+train_data, test_data = getdata()
+train_iter = load_array(train_data, arg.batch_size)
 print("load data done!")
 # model
 net = GCN(2, 1).to(device)

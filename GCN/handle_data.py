@@ -60,17 +60,18 @@ def handle_data():
 
 def load_array(data_arrays, batch_size, is_train=True):  # @save
     """构造一个PyTorch数据迭代器"""
-    dataset = data.TensorDataset(data_arrays)
+    dataset = data.TensorDataset(*data_arrays)
     return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
 
-X, adj, Y = handle_data()
-train_size = int(0.8*len(X))
-# 用来训练
-train_data = (X[:train_size], adj[:train_size], Y[:train_size])
-# 用来测试
-test_data = (X[train_size:], adj[train_size:], Y[train_size:])
-# train_data_iter = load_array(train_data,  train_size//100)
+def getdata():
+    X, adj, Y = handle_data()
+    train_size = int(0.95*len(X))
+    # 用来训练
+    train_data = (X[:train_size], adj[:train_size], Y[:train_size])
+    # 用来测试
+    test_data = (X[train_size:], adj[train_size:], Y[train_size:])
+    return train_data, test_data
 
 
 # x = torch.from_numpy(X[:10, ].copy())
