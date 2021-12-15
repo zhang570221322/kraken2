@@ -77,9 +77,9 @@ def load_array(data_arrays, batch_size, is_train=True):  # @save
     return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
 
-def getdata():
+def getdata(train_ratio=0.998):
     X, adj, Y = handle_data()
-    train_size = int(0.95*len(X))
+    train_size = int(train_ratio*len(X))
     # 用来训练
     train_data = (X[:train_size], adj[:train_size], Y[:train_size])
     # 用来测试
