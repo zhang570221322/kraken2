@@ -1,4 +1,4 @@
-from model import GCN
+from model import GCN, Arg
 import torch
 from torch import nn
 import random
@@ -7,16 +7,8 @@ import pdb
 random.seed(32)
 
 
-class Arg:
-    num_epochs = 200
-    lr = learning_rate = 5
-    weight_decay = 0
-    batch_size = 1024
-
-
-arg = Arg()
+arg = Arg(200, 5, 0, 1024)
 device = torch.device('cuda:1')
-# device = torch.device('cpu')
 
 # data
 print("start to load data...")

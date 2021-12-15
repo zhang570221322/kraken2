@@ -1,4 +1,4 @@
-from model import GCN
+from model import GCN, Arg
 import torch
 from torch import nn
 import random
@@ -7,14 +7,7 @@ import pdb
 random.seed(32)
 
 
-class Arg:
-    num_epochs = 200
-    lr = learning_rate = 5
-    weight_decay = 0
-    batch_size = 256
-
-
-arg = Arg()
+arg = Arg(200, 0.01, 0.88, 256)
 # device = torch.device('cuda:1')
 device = torch.device('cpu')
 # data
@@ -56,4 +49,4 @@ for epoch in range(arg.num_epochs):
     acc = (test_label == real_label).sum() / len(test_label)
     loss_record.append(print_loss)
     acc_record.append(acc)
-my_plot(list(range(len(loss_record))), loss_record, acc_record)
+my_plot(list(range(len(loss_record))), loss_record, acc_record, arg)
