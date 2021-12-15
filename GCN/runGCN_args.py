@@ -59,4 +59,4 @@ for arg in args:
         acc = (test_label == real_label).sum() / len(test_label)
         loss_record.append(print_loss)
         acc_record.append(acc)
-    my_plot(list(range(len(loss_record))), loss_record, acc_record, arg)
+    my_plot(list(range(len(loss_record))), loss_record, acc_record, arg=arg)
