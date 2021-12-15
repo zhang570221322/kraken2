@@ -1,8 +1,21 @@
 import numpy as np
 import scipy.sparse as sp
 from torch.utils import data
-
+import matplotlib.pyplot as plt
+import arrow
 import torch
+
+
+def my_plot(x, y1, y2, figsize=(20, 8)):
+    plt.figure(figsize=figsize)
+    plt.subplot(211)
+    plt.plot(x, y1, color='r', marker='.', linestyle='-')
+    plt.title("epoch/Loss")
+    plt.subplot(212)
+    plt.plot(x, y2, color='r', marker='.', linestyle='-')
+    plt.title("epoch/Acc")
+    file_name = arrow.now().format("YYYY_MM_DD_HH_mm_ss")
+    plt.savefig(f"{file_name}.jpg")
 
 
 def normalize_feature(features):
@@ -25,7 +38,7 @@ def load_data(N=220):
     x2 = np.asarray(np.load(f"{preifx}/x2.npy",
                     allow_pickle=True), dtype=np.float32)
     adjacent_matrixs = np.load(
-        f"{preifx}/adjacent_matrixs.npy", allow_pickle=True)
+        f"{preifx}/bak/adjacent_matrixs.npy_bak", allow_pickle=True)
     Y = list(np.load(f"{preifx}/Y.npy", allow_pickle=True))
     # 还原x1,x2至x
     for index, temp in enumerate(zip(x1, x2)):
