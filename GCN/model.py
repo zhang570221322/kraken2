@@ -3,6 +3,14 @@ from torch import nn
 from torch.nn import functional as F
 
 
+class Arg:
+    def __init__(self, num_epochs, learning_rate, weight_decay, batch_size) -> None:
+        self.num_epochs = num_epochs
+        self.lr = self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.batch_size = batch_size
+
+
 class GraphConvolution(nn.Module):
 
     def __init__(self, input_dim, output_dim,

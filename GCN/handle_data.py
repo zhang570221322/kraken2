@@ -6,8 +6,11 @@ import arrow
 import torch
 
 
-def my_plot(x, y1, y2, figsize=(20, 8)):
+def my_plot(x, y1, y2, figsize=(20, 8), arg=None):
     plt.figure(figsize=figsize)
+    if arg:
+        text = f"num_epochs:{arg.num_epochs}\nlearning_rate:{arg.learning_rate}\nweight_decay:{arg.weight_decay}\nbatch_size:{arg.batch_size}"
+        plt.figtext(.00, .01,  text, fontsize=15)
     plt.subplot(211)
     plt.plot(x, y1, color='r', marker='.', linestyle='-')
     plt.title("epoch/Loss")
