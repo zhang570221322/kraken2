@@ -33,7 +33,7 @@ def normalize_feature(features):
 
 
 def load_data(N=220):
-    preifx = "/data/home/wlzhang/classfication/kraken2_db/2021_11_01/library/stimulation/test/dp/data"
+    preifx = "/home/yegpu/zwl/data/"
     x1 = list(np.load(f"{preifx}/x1.npy", allow_pickle=True))
     x2 = np.asarray(np.load(f"{preifx}/x2.npy",
                     allow_pickle=True), dtype=np.float32)
