@@ -38,7 +38,7 @@ def load_data(N=220):
     x2 = np.asarray(np.load(f"{preifx}/x2.npy",
                     allow_pickle=True), dtype=np.float32)
     adjacent_matrixs = np.load(
-        f"{preifx}/bak/adjacent_matrixs.npy", allow_pickle=True)
+        f"{preifx}/adjacent_matrixs.npy", allow_pickle=True)
     Y = list(np.load(f"{preifx}/Y.npy", allow_pickle=True))
     # 还原x1,x2至x
     for index, temp in enumerate(zip(x1, x2)):
