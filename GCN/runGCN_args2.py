@@ -50,6 +50,9 @@ for arg in args:
             l = loss(net((X, adj)), y)
             l.backward()
             optimizer.step()
+        test_x = X
+        test_adj = adj
+        test_y = y
         print_loss = float(loss(net((test_x, test_adj)),
                                 test_y).cpu().detach().numpy())
         real_label = net((test_x, test_adj)).squeeze().max(
