@@ -7,14 +7,14 @@ import pdb
 random.seed(32)
 
 
-args = [Arg(200, 0.05, 0.88, 256),
-        Arg(200, 0.05, 0.78, 512),
-        Arg(400, 0.01, 0.98, 256),
-        Arg(400, 0.01, 0.75, 256),
-        Arg(800, 0.005, 0.78, 512),
-        Arg(800, 0.005,  0.98, 256),
-        Arg(1000, 0.001, 0.75, 512),
-        Arg(1000, 0.001, 0.88, 256),
+args = [Arg(200, 0.01, 0.88, 1024),
+        # Arg(200, 0.05, 0.78, 512),
+        # Arg(400, 0.01, 0.98, 256),
+        # Arg(400, 0.01, 0.75, 256),
+        # Arg(800, 0.005, 0.78, 512),
+        # Arg(800, 0.005,  0.98, 256),
+        # Arg(1000, 0.001, 0.75, 512),
+        # Arg(1000, 0.001, 0.88, 256),
         ]
 
 
@@ -27,7 +27,7 @@ train_data, test_data = getdata()
 print("load data done!")
 # model
 net = GCN(2, 1).to(device)
-loss = nn.SmoothL1Loss()
+loss = nn.MSELoss()
 # 测试数据
 test_x, test_adj, test_y = test_data
 test_x = test_x.to(device)

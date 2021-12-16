@@ -90,13 +90,6 @@ def getdata(train_ratio=0.999):
     return train_data, test_data
 
 
-# train, _ = getdata()
-# pdb.set_trace()
-# X, adjacent_matrixs, Y = train
-# n = 1000
-# x = X[:n, ]
-# supports = adjacent_matrixs[:n, ]
-# y = Y[:n, ]
-# torch.save([x, supports, y], 'train-data')
+
 
 # device = torch.device('cpu')

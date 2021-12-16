@@ -2,21 +2,21 @@ from model import GCN, Arg
 import torch
 from torch import nn
 import random
-from handle_data import my_plot
+from handle_data import getdata, load_array, my_plot
 import pdb
 random.seed(32)
 
 
 arg = Arg(200, 0.01, 0.88, 256)
 # device = torch.device('cuda:1')
-device = torch.device('cpu')
+device = torch.device('cuda:0')
 # data
 print("start to load data...")
-x, adj, y = torch.load("./trian-data")
-y = y.unsqueeze(-1)
-train_data = (x, adj, y)
-train_iter = [[x, adj, y]]
-test_data = (x[800:], adj[800:], y[800:])
+train_data,_  = getdata()
+x, adj, y = train_data
+train_iter = [[x[:800], adj[:800], y[:800]]]
+test_data = (x[800:1000], adj[800:1000], y[800:1000])
+pdb.set_trace()
 print("load data done!")
 # model
 net = GCN(2, 1).to(device)
