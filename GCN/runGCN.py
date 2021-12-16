@@ -17,13 +17,12 @@ train_iter = load_array(train_data, arg.batch_size)
 print("load data done!")
 # model
 net = GCN(2, 1).to(device)
-loss = nn.SmoothL1Loss()
+loss = nn.MSELoss()
 # 测试数据
 test_x, test_adj, test_y = test_data
 test_x = test_x.to(device)
 test_adj = test_adj.float().to(device)
 test_y = test_y.to(device)
-real_ls = test_y.unsqueeze(-1).max(axis=1).indices.T
 # Adam
 optimizer = torch.optim.Adam(net.parameters(),
                              lr=arg.learning_rate,

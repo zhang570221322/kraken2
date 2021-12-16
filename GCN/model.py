@@ -52,15 +52,6 @@ class GCN(nn.Module):
         for i in range(len(self.layers)):
             x, adj = self.layers[i]((x, adj))
         x = self.out(x)
+        x = x.squeeze()
+        x = F.softmax(x, dim=-1)
         return x
-
-    def l2_loss(self):
-        layer = self.layers.children()
-        layer = next(iter(layer))
-        loss = None
-        for p in layer.parameters():
-            if loss is None:
-                loss = p.pow(2).sum()
-            else:
-                loss += p.pow(2).sum()
-        return loss
