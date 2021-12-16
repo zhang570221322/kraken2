@@ -49,10 +49,7 @@ class GCN(nn.Module):
 
     def forward(self, inputs):
         x, adj = inputs
-        x = x[:, :, 0].unsqueeze(-1)
         for i in range(len(self.layers)):
             x, adj = self.layers[i]((x, adj))
         x = self.out(x)
-        x = x.squeeze()
-
         return x

@@ -36,19 +36,21 @@ def normalize_feature(features):
     return features
 
 
-def load_data(N=220):
+def load_data():
     preifx = "/home/yegpu/zwl/data/"
     x1 = list(np.load(f"{preifx}/x1.npy", allow_pickle=True))
-    x2 = np.asarray(np.load(f"{preifx}/x2.npy",
-                    allow_pickle=True), dtype=np.float32)
+    # 计算最大的N
+    N = 0
+    for temp_x1 in x1:
+        temp = len(temp_x1)
+        N = max(temp, N)
     adjacent_matrixs = np.load(
         f"{preifx}/adjacent_matrixs.npy", allow_pickle=True)
     Y = list(np.load(f"{preifx}/Y.npy", allow_pickle=True))
     # 还原x1,x2至x
-    for index, temp in enumerate(zip(x1, x2)):
-        temp_x1, temp_x2 = temp
+    for index, temp_x1 in enumerate(x1):
         need = list(np.zeros((N-len(temp_x1),), dtype=np.float32))
-        x1[index] = [x1[index]+need, temp_x2]
+        x1[index] = [x1[index]+need]
     X = np.asarray(x1, dtype=np.float32)
     # 还原邻接矩阵
     adjacent_matrixs_np = np.zeros((X.shape[0], N, N), dtype=np.int8)
@@ -71,6 +73,7 @@ def handle_data():
     X = torch.from_numpy(X)
     adj = torch.from_numpy(adjacent_matrixs)
     Y = torch.from_numpy(Y)
+    Y = Y.unsqueeze(-1)
     return X, adj, Y
 
 
@@ -88,8 +91,6 @@ def getdata(train_ratio=0.999):
     # 用来测试
     test_data = (X[train_size:], adj[train_size:], Y[train_size:])
     return train_data, test_data
-
-
 
 
 # device = torch.device('cpu')
