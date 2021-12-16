@@ -25,7 +25,6 @@ test_x, test_adj, test_y = test_data
 test_x = test_x.to(device)
 test_adj = test_adj.float().to(device)
 test_y = test_y.to(device)
-real_ls = test_y.unsqueeze(-1).max(axis=1).indices.T
 # Adam
 optimizer = torch.optim.Adam(net.parameters(),
                              lr=arg.learning_rate,
