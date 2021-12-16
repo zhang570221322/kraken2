@@ -12,14 +12,15 @@ arg = Arg(200, 0.01, 0.88, 256)
 device = torch.device('cpu')
 # data
 print("start to load data...")
-x, adj, y = torch.load("./test-data")
+x, adj, y = torch.load("./trian-data")
 y = y.unsqueeze(-1)
-train_data = test_data = (x, adj, y)
+train_data = (x, adj, y)
 train_iter = [[x, adj, y]]
+test_data = (x[800:], adj[800:], y[800:])
 print("load data done!")
 # model
 net = GCN(2, 1).to(device)
-loss = nn.SmoothL1Loss()
+loss = nn.MSELoss()
 # 测试数据
 test_x, test_adj, test_y = test_data
 test_x = test_x.to(device)
@@ -37,9 +38,11 @@ for epoch in range(arg.num_epochs):
         adj = adj.float().to(device)
         y = y.to(device)
         optimizer.zero_grad()
+        y = y.squeeze()
         l = loss(net((X, adj)), y)
         l.backward()
         optimizer.step()
+    # pdb.set_trace()
     print_loss = float(loss(net((test_x, test_adj)),
                        test_y).cpu().detach().numpy())
     real_label = net((test_x, test_adj)).squeeze().max(

@@ -1,3 +1,4 @@
+import pdb
 import numpy as np
 import scipy.sparse as sp
 from torch.utils import data
@@ -70,7 +71,6 @@ def handle_data():
     X = torch.from_numpy(X)
     adj = torch.from_numpy(adjacent_matrixs)
     Y = torch.from_numpy(Y)
-    Y = Y.unsqueeze(-1)
     return X, adj, Y
 
 
@@ -80,7 +80,7 @@ def load_array(data_arrays, batch_size, is_train=True):  # @save
     return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
 
-def getdata(train_ratio=0.998):
+def getdata(train_ratio=0.999):
     X, adj, Y = handle_data()
     train_size = int(train_ratio*len(X))
     # 用来训练
@@ -90,8 +90,13 @@ def getdata(train_ratio=0.998):
     return train_data, test_data
 
 
-# x = torch.from_numpy(X[:10, ].copy())
-# supports = torch.from_numpy(adjacent_matrixs[:10, ].copy())
-# y = torch.from_numpy(Y[:10, ].copy())
-# torch.save([x, supports, y], 'test-data')
+# train, _ = getdata()
+# pdb.set_trace()
+# X, adjacent_matrixs, Y = train
+# n = 1000
+# x = X[:n, ]
+# supports = adjacent_matrixs[:n, ]
+# y = Y[:n, ]
+# torch.save([x, supports, y], 'train-data')
+
 # device = torch.device('cpu')
