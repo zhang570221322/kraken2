@@ -26,7 +26,7 @@ train_data, test_data = getdata()
 
 print("load data done!")
 # model
-net = GCN(2, 1).to(device)
+net = GCN(1, 1).to(device)
 loss = nn.MSELoss()
 # 测试数据
 test_x, test_adj, test_y = test_data
@@ -51,10 +51,10 @@ for arg in args:
             l = loss(net((X, adj)), y)
             l.backward()
             optimizer.step()
-        
+
         net.eval()
         test_rl = net((test_x, test_adj))
-        print_loss = float(loss(test_rl,test_y).cpu().detach().numpy())
+        print_loss = float(loss(test_rl, test_y).cpu().detach().numpy())
         real_label = test_rl.max(axis=1).indices.cpu().detach().numpy()
         test_label = test_y.max(axis=1).indices.cpu().detach().numpy()
         acc = (test_label == real_label).sum() / len(test_label)

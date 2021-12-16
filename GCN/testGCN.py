@@ -12,12 +12,14 @@ arg = Arg(50, 0.01, 0.98, 200)
 device = torch.device('cuda:1')
 # data
 print("start to load data...")
-train_data,_  = getdata()
+train_data, _ = getdata()
 x, adj, y = train_data
 train_count = 1000
-test_count=train_count+100
-train_iter = load_array((x[:train_count], adj[:train_count], y[:train_count]), arg.batch_size)
-test_data = (x[train_count:test_count], adj[train_count:test_count], y[train_count:test_count])
+test_count = train_count+100
+train_iter = load_array(
+    (x[:train_count], adj[:train_count], y[:train_count]), arg.batch_size)
+test_data = (x[train_count:test_count],
+             adj[train_count:test_count], y[train_count:test_count])
 print("load data done!")
 # model
 net = GCN(1, 1).to(device)
@@ -34,17 +36,19 @@ optimizer = torch.optim.Adam(net.parameters(),
 loss_record = []
 acc_record = []
 for epoch in range(arg.num_epochs):
+    net.train()
     for X, adj, y in train_iter:
         X = X.to(device)
         adj = adj.float().to(device)
         y = y.to(device)
         optimizer.zero_grad()
-        y = y.squeeze()
         l = loss(net((X, adj)), y)
         l.backward()
         optimizer.step()
+
+    net.eval()
     test_rl = net((test_x, test_adj))
-    print_loss = float(loss(test_rl,test_y).cpu().detach().numpy())
+    print_loss = float(loss(test_rl, test_y).cpu().detach().numpy())
     real_label = test_rl.max(axis=1).indices.cpu().detach().numpy()
     test_label = test_y.max(axis=1).indices.cpu().detach().numpy()
     acc = (test_label == real_label).sum() / len(test_label)
