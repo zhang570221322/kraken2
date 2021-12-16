@@ -7,7 +7,7 @@ import pdb
 random.seed(32)
 
 
-args = [Arg(200, 0.01, 0.88, 1024),
+args = [Arg(60, 0.01, 0.88, 14240),
         # Arg(200, 0.05, 0.78, 512),
         # Arg(400, 0.01, 0.98, 256),
         # Arg(400, 0.01, 0.75, 256),
@@ -42,6 +42,7 @@ for arg in args:
     loss_record = []
     acc_record = []
     for epoch in range(arg.num_epochs):
+        net.train()
         for X, adj, y in train_iter:
             X = X.to(device)
             adj = adj.float().to(device)
@@ -50,12 +51,17 @@ for arg in args:
             l = loss(net((X, adj)), y)
             l.backward()
             optimizer.step()
-        print_loss = float(loss(net((test_x, test_adj)),
-                                test_y).cpu().detach().numpy())
-        real_label = net((test_x, test_adj)).squeeze().max(
-            axis=1).indices.cpu().detach().numpy()
-        test_label = test_y.squeeze().max(axis=1).indices.cpu().detach().numpy()
+        
+        net.eval()
+        test_rl = net((test_x, test_adj))
+        print_loss = float(loss(test_rl,test_y).cpu().detach().numpy())
+        real_label = test_rl.max(axis=1).indices.cpu().detach().numpy()
+        test_label = test_y.max(axis=1).indices.cpu().detach().numpy()
         acc = (test_label == real_label).sum() / len(test_label)
+        # pdb.set_trace()
+        print(epoch)
+        print(print_loss)
+        print(acc)
         loss_record.append(print_loss)
         acc_record.append(acc)
     my_plot(list(range(len(loss_record))), loss_record, acc_record, arg=arg)

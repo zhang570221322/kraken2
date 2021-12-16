@@ -7,19 +7,20 @@ import pdb
 random.seed(32)
 
 
-arg = Arg(200, 0.01, 0.88, 256)
+arg = Arg(50, 0.01, 0.98, 200)
 # device = torch.device('cuda:1')
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 # data
 print("start to load data...")
 train_data,_  = getdata()
 x, adj, y = train_data
-train_iter = [[x[:800], adj[:800], y[:800]]]
-test_data = (x[800:1000], adj[800:1000], y[800:1000])
-pdb.set_trace()
+train_count = 1000
+test_count=train_count+100
+train_iter = load_array((x[:train_count], adj[:train_count], y[:train_count]), arg.batch_size)
+test_data = (x[train_count:test_count], adj[train_count:test_count], y[train_count:test_count])
 print("load data done!")
 # model
-net = GCN(2, 1).to(device)
+net = GCN(1, 1).to(device)
 loss = nn.MSELoss()
 # 测试数据
 test_x, test_adj, test_y = test_data
@@ -42,13 +43,15 @@ for epoch in range(arg.num_epochs):
         l = loss(net((X, adj)), y)
         l.backward()
         optimizer.step()
-    # pdb.set_trace()
-    print_loss = float(loss(net((test_x, test_adj)),
-                       test_y).cpu().detach().numpy())
-    real_label = net((test_x, test_adj)).squeeze().max(
-        axis=1).indices.cpu().detach().numpy()
-    test_label = test_y.squeeze().max(axis=1).indices.cpu().detach().numpy()
+    test_rl = net((test_x, test_adj))
+    print_loss = float(loss(test_rl,test_y).cpu().detach().numpy())
+    real_label = test_rl.max(axis=1).indices.cpu().detach().numpy()
+    test_label = test_y.max(axis=1).indices.cpu().detach().numpy()
     acc = (test_label == real_label).sum() / len(test_label)
+    # pdb.set_trace()
+    print(epoch)
+    print(print_loss)
+    print(acc)
     loss_record.append(print_loss)
     acc_record.append(acc)
 my_plot(list(range(len(loss_record))), loss_record, acc_record, arg=arg)

@@ -39,16 +39,17 @@ class GCN(nn.Module):
         print('input dim:', input_dim)
         print('output dim:', output_dim)
         self.layers = nn.ModuleList()
-        self.num_layer = 3
-        self.gcn_dim = [self.input_dim, 16, 32, 64]
+        self.num_layer = 2
+        self.gcn_dim = [self.input_dim, 8, 64]
         for i in range(self.num_layer):
             self.layers.append(GraphConvolution(
                 self.gcn_dim[i], self.gcn_dim[i+1]))
         self.out = nn.Sequential(
-            nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, self.output_dim))
+            nn.Linear(64, 8), nn.ReLU(), nn.Linear(8, self.output_dim))
 
     def forward(self, inputs):
         x, adj = inputs
+        x = x[:,:,0].unsqueeze(-1)
         for i in range(len(self.layers)):
             x, adj = self.layers[i]((x, adj))
         x = self.out(x)
