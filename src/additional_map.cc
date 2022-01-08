@@ -22,18 +22,20 @@ namespace kraken2
     {
         ifstream ifile(filename);
 
+        string line;
+        string first;
+        string second;
+        taxid_t third;
+        string forth;
         if (ifile.is_open() && !isFileEmpty(ifile))
         {
             while (!ifile.eof())
             {
-                string line;
-                string seqID;
-                taxid_t empty;
-                taxid_t taxID;
+
                 getline(ifile, line);
                 istringstream linestream(line);
-                linestream >> seqID >> empty >> taxID;
-                _seqID_taxID.emplace(seqID, empty);
+                linestream >> first >> second >> third >> forth;
+                _seqID_taxID.emplace(first, third);
             }
         }
         else if (!ifile.is_open())
@@ -104,10 +106,7 @@ namespace kraken2
         {
             weight = conflict_ump[minimizer];
         }
-
-        // return 1.0 / (0.81 + 0.05 * weight * weight);
-
-        return 13.0 - 0.5 * weight - log(child_count + 1);
+        return 13.0 - 0.02 * weight - log(child_count + 1);
     }
 
     void AdditionalMap::AddMinimizer(uint64_t minimizer)
@@ -125,51 +124,66 @@ namespace kraken2
         }
     }
     // Func 寻找到冲突路径,将冲突路径上的taxid_t填充到thread_conflict_ancestor中
-    // 1.找到score_taxid的map中的较为相近的score对应的taxid_t
-    // 2.从hit_counts中找到taxid_t的祖先,填充到thread_conflict_ancestor中
+    // 1. leaf中存储当前read的叶子节点,判断当前叶子节点分数是否符合条件，如果符合，设置为ture
+    // 2. 对于刚好等于max_score的,直接设置为ture
     void AdditionalMap::findConflictLTR(taxon_counts_t &hit_counts, double max_score, uint64_t &conflicts, Taxonomy &taxonomy)
     {
-
+        vector<taxid_t> &max_taxons = score_taxid[max_score];
         for (auto &kv_pair1 : score_taxid)
         {
-
-            if (kv_pair1.first == max_score)
+            vector<taxid_t> &taxons = kv_pair1.second;
+            // 处理相近的叶子结点
+            for (auto taxon : taxons)
             {
-                vector<taxid_t> &taxons = kv_pair1.second;
 
-                if (taxons.size() > 1)
+                if (labs(kv_pair1.first - max_score) <= max_score / 20.0 && kv_pair1.first != max_score)
                 {
-                    conflicts += taxons.size();
-                    for (auto taxon : taxons)
+
+                    for (auto &leaf_taxon_pair : leaf)
                     {
-                        leaf.push_back(taxon);
+                        if (taxon == leaf_taxon_pair.first)
+                        {
+                            // 设置为冲突路径
+                            conflicts += 1;
+                            leaf[leaf_taxon_pair.first] = true;
+                        }
                     }
                 }
             }
-            else if (labs(kv_pair1.first - max_score) <= max_score / 20.0)
+        }
+
+        if (max_taxons.size() > 1)
+        {
+
+            for (auto taxon : max_taxons)
             {
-                vector<taxid_t> &taxons = kv_pair1.second;
-                conflicts += taxons.size();
-                for (auto taxon : taxons)
-                {
-                    leaf.push_back(taxon);
-                }
+                leaf[taxon] = true;
+                conflicts += 1;
+            }
+        }
+        else
+        {
+            // 如果有相近的路径,则原来路径也是冲突路径
+            if (conflicts)
+            {
+                leaf[max_taxons.front()] = true;
+                conflicts += 1;
             }
         }
 
         for (auto &kv_pair2 : hit_counts)
         {
             taxid_t taxon2 = kv_pair2.first;
-            for (auto taxon : leaf)
+            for (auto &leaf_taxon : leaf)
             {
-                if (taxonomy.IsAAncestorOfB(taxon2, taxon))
+                if (taxon2 != leaf_taxon.first && leaf_taxon.second && taxonomy.IsAAncestorOfB(taxon2, leaf_taxon.first))
                 {
                     conflict_ancestor.push_back(taxon2);
                 }
             }
         }
     }
-    // 持久化,将临时的temp,但是对于多线程必须是串行进行的.
+
     void AdditionalMap::saveTemp(taxon_counts_t &hit_counts, double max_score, uint64_t &conflicts, Taxonomy &taxonomy)
     {
         // 先计算出需要降低的tax,存入conflict_ancestor
@@ -182,6 +196,7 @@ namespace kraken2
                 vector<uint64_t> &kmers = conflict_temp[code];
                 for (size_t i = 0; i < kmers.size(); i++)
                 {
+                    // 持久化,将每个read的冲突kmer存入conflict_ump,但是对于多线程必须是串行进行的.
                     AddMinimizer(kmers[i]);
                 }
             }
