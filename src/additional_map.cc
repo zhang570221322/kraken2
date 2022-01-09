@@ -24,7 +24,7 @@ namespace kraken2
 
         string line;
         string first;
-        string second;
+        taxid_t second;
         taxid_t third;
         string forth;
         if (ifile.is_open() && !isFileEmpty(ifile))
@@ -35,7 +35,7 @@ namespace kraken2
                 getline(ifile, line);
                 istringstream linestream(line);
                 linestream >> first >> second >> third >> forth;
-                _seqID_taxID.emplace(first, third);
+                _seqID_taxID.emplace(first, second);
             }
         }
         else if (!ifile.is_open())
@@ -106,7 +106,7 @@ namespace kraken2
         {
             weight = conflict_ump[minimizer];
         }
-        return 13.0 - 0.02 * weight - log(child_count + 1);
+        return 13.0 - 0.05 * weight - log(child_count + 1);
     }
 
     void AdditionalMap::AddMinimizer(uint64_t minimizer)

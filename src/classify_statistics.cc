@@ -59,6 +59,7 @@ struct Options
   int minimum_hit_groups;
   bool use_memory_mapping;
   bool match_input_order;
+  bool origin_mode;
 };
 
 struct ClassificationStats
@@ -127,11 +128,13 @@ int main(int argc, char **argv)
   opts.minimum_quality_score = 0;
   opts.minimum_hit_groups = 0;
   opts.use_memory_mapping = false;
+  opts.origin_mode = false;
 
   taxon_counters_t taxon_counters; // stats per taxon
   ParseCommandLine(argc, argv, opts);
 
   omp_set_num_threads(opts.num_threads);
+  cerr << "opts.origin_mode : " << opts.origin_mode << endl;
   cerr << "Classify with conflict hash map" << endl;
 
   cerr << "Loading conflict hashmap...";
@@ -428,7 +431,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
           // 加上@,去掉后面的/1或/2
-          string seq1_id = seq1.id.substr(0, seq1.id.size() - 2);
+          // string seq1_id = seq1.id.substr(0, seq1.id.size() - 2);
+          string seq1_id = seq1.id;
           taxid_t real_internal_taxo = tax.GetInternalID(add_map._seqID_taxID[seq1_id]);
 
           string rank = tax.rank_data() + node.rank_offset;
@@ -688,14 +692,16 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
   // cout << hit_counts[max_taxon] << endl;
 
   //  最小的hit满足总命中的1/10
-  hit_score = hit_counts[max_taxon];
-  double least_score = max_score * 0.02;
-  while (max_taxon && hit_score < least_score)
+  if (!opts.origin_mode)
   {
-    max_taxon = taxonomy.nodes()[max_taxon].parent_id;
     hit_score = hit_counts[max_taxon];
+    double least_score = max_score * 0.1;
+    while (max_taxon && hit_score < least_score)
+    {
+      max_taxon = taxonomy.nodes()[max_taxon].parent_id;
+      hit_score = hit_counts[max_taxon];
+    }
   }
-
   return max_taxon;
 }
 
@@ -1011,7 +1017,7 @@ void ParseCommandLine(int argc, char **argv, Options &opts)
 {
   int opt;
 
-  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:g:nmzqPSMK")) != -1)
+  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:g:nmzqrPSMK")) != -1)
   {
     switch (opt)
     {
@@ -1040,6 +1046,9 @@ void ParseCommandLine(int argc, char **argv, Options &opts)
       break;
     case 'q':
       opts.quick_mode = true;
+      break;
+    case 'r':
+      opts.origin_mode = true;
       break;
     case 'p':
       opts.num_threads = atoi(optarg);

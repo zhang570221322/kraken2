@@ -52,7 +52,7 @@ my $report_zero_counts = 0;
 my $minimum_hit_groups = 2;
 my $report_minimizer_data = 0;
 my $keep_map = 0;
-
+my $origin = 0;
 GetOptions(
   "help" => \&display_help,
   "version" => \&display_version,
@@ -75,7 +75,8 @@ GetOptions(
   "report-zero-counts" => \$report_zero_counts,
   "minimum-hit-groups=i" => \$minimum_hit_groups,
   "report-minimizer-data" => \$report_minimizer_data,
-  "keep-map" => \$keep_map
+  "keep-map" => \$keep_map,
+  "origin" => \$origin
 );
 
 if (! defined $threads) {
@@ -157,7 +158,7 @@ push @flags, "-z" if $report_zero_counts;
 push @flags, "-M" if $memory_mapping;
 push @flags, "-g", $minimum_hit_groups;
 push @flags, "-K" if $report_minimizer_data;
-
+push @flags, "-r" if $origin; # origin mode
 # Stupid hack to keep filehandles from closing before exec
 # filehandles opened inside for loop below go out of scope
 # and are closed at end of loop without this
@@ -240,6 +241,7 @@ Options:
   --gzip-compressed       Input files are compressed with gzip
   --bzip2-compressed      Input files are compressed with bzip2
   --keep-map         	  Keep and update the additiional map if is present
+  --origin         	  will run kraken2 origin if is present
   --minimum-hit-groups NUM
                           Minimum number of hit groups (overlapping k-mers
                           sharing the same minimizer) needed to make a call
