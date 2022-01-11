@@ -53,6 +53,7 @@ namespace kraken2
         conflict_temp.clear();
         conflict_ancestor.clear();
         leaf.clear();
+        leaf_count.clear();
         score_taxid.clear();
     }
     void AdditionalMap::ReadConflictFile(const char *filename)

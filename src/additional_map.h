@@ -23,6 +23,7 @@ namespace kraken2
         vector<taxid_t> conflict_ancestor;
         unordered_map<taxid_t, vector<uint64_t>> conflict_temp;
         unordered_map<taxid_t, bool> leaf;
+        unordered_map<taxid_t, int> leaf_count;
         unordered_map<double, vector<taxid_t>> score_taxid;
         void clearConflictObj();
         void ReadConflictFile(const char *filename);

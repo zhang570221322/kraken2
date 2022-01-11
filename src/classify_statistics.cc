@@ -104,10 +104,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                          KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
                          Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
                          vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-                         vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap &add_map);
+                         vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap &add_map, AdditionalMap &thread_add_map);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa, Taxonomy &taxonomy);
 taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &tax, size_t total_minimizers,
-                    Options &opts, AdditionalMap &add_map, ostringstream &koss);
+                    Options &opts, AdditionalMap &add_map, ostringstream &koss, AdditionalMap &thread_add_map);
 void ReportStats(struct timeval time1, struct timeval time2, ClassificationStats &stats);
 void InitializeOutputs(Options &opts, OutputStreamData &outputs, SequenceFormat format);
 void MaskLowQualityBases(Sequence &dna, int minimum_quality_score);
@@ -134,8 +134,8 @@ int main(int argc, char **argv)
   ParseCommandLine(argc, argv, opts);
 
   omp_set_num_threads(opts.num_threads);
-  cerr << "opts.origin_mode : " << opts.origin_mode << endl;
-  cerr << "Classify with conflict hash map" << endl;
+  cerr << "opts.origin_mode : " << opts.origin_mode;
+  cerr << "  Classify with conflict hash map" << endl;
 
   cerr << "Loading conflict hashmap...";
   AdditionalMap add_map;
@@ -277,8 +277,8 @@ void ReportStats(struct timeval time1, struct timeval time2,
   fprintf(stderr, "    %llu sequences is not properly classified(%.4f%%)\n",
           (unsigned long long)stats.total_error,
           stats.total_error * 100.0 / stats.total_classified);
-  fprintf(stderr, "    %llu sequences is properly classified under the genus level (%.4f%%)\n",
-          (unsigned long long)stats.total_assegned_g, 100.0 * recall_g);
+  fprintf(stderr, "    %llu sequences is properly classified under the all level (%.4f%%)\n",
+          (unsigned long long)(stats.total_classified - stats.total_error - stats.total_dberror), (stats.total_classified - stats.total_dberror - stats.total_error) * 100.0 / stats.total_sequences);
 
   fprintf(stderr, "  %llu sequences unclassified (%.4f%%)\n\n",
           (unsigned long long)total_unclassified,
@@ -345,6 +345,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
     uint64_t block_id;
     OutputData out_data;
     taxon_counters_t thread_taxon_counters;
+    //多线程计数
+    AdditionalMap thread_add_map;
 
     while (true)
     {
@@ -357,7 +359,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
       thread_stats.total_error = 0;
 
       auto ok_read = false;
-
+      thread_add_map.clearConflictObj();
 #pragma omp critical(seqread)
       { // Input processing block
         if (!opts.paired_end_processing)
@@ -415,7 +417,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
         }
         auto call = ClassifySequence(seq1, seq2,
                                      kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-                                     taxa, hit_counts, translated_frames, thread_taxon_counters, add_map);
+                                     taxa, hit_counts, translated_frames, thread_taxon_counters, add_map, thread_add_map);
         // 打印金标准
         // for (auto &kv_pair : add_map._seqID_taxID)
         // {
@@ -434,69 +436,33 @@ void ProcessFiles(const char *filename1, const char *filename2,
           // string seq1_id = seq1.id.substr(0, seq1.id.size() - 2);
           string seq1_id = seq1.id;
           taxid_t real_internal_taxo = tax.GetInternalID(add_map._seqID_taxID[seq1_id]);
-
-          string rank = tax.rank_data() + node.rank_offset;
-          add_map.MyCounter1[rank] += 1;
-
-          bool isA = true;
-
-          //  call is the ancestor of real_internal_taxo?
-          if (call <= real_internal_taxo)
-          {
-            isA = tax.IsAAncestorOfB(call, real_internal_taxo);
-          }
-          else
-          {
-            //  real_internal_taxo is the ancestor of call?
-            isA = tax.IsAAncestorOfB(real_internal_taxo, call);
-          }
-          // 1
-
-          // cout << "add_map._seqID_taxID[seq1_id]=" << add_map._seqID_taxID[seq1_id] << endl;
-          // TaxonomyNode node_1 = tax.nodes()[call];
-          // cout << "外部节点" << node_1.external_id << "的linear是";
-          // while (node_1.parent_id != 0)
-          // {
-          //   cout << "->" << node_1.external_id;
-          //   node_1 = tax.nodes()[node_1.parent_id];
-          // }
-          // cout << endl;
-          // cout << "内部节点" << real_internal_taxo << "的linear是" << real_internal_taxo;
-          // while (node_1.parent_id != 0)
-          // {
-          //   cout << "->" << node_1.parent_id;
-          //   node_1 = tax.nodes()[node_1.parent_id];
-          // }
-          // cout << endl;
-          // printf("%s的预测:%lu,真实:%lu,is %i\n", seq1.id.c_str(), call, real_internal_taxo, isA);
-          // break;
-          // 2
-          if (isA)
+          if (real_internal_taxo)
           {
 
-            if (IsSpecies(tax, node))
-            {
-              thread_stats.total_assegned_s++;
-              thread_stats.total_assegned_g++;
-            }
-            else if (IsGenus(tax, node))
-            {
-              thread_stats.total_assegned_g++;
-            }
-            else if (node.external_id == 0)
+            //  预测的是真实taxo的祖先
+            if (tax.IsAAncestorOfB(call, real_internal_taxo))
             {
 
-              thread_stats.total_dberror++;
+              add_map.MyCounter1[tax.rank_data() + node.rank_offset] += 1;
+              if (IsSpecies(tax, node))
+              {
+                thread_stats.total_assegned_s++;
+                thread_stats.total_assegned_g++;
+              }
+              else if (IsGenus(tax, node))
+              {
+                thread_stats.total_assegned_g++;
+              }
+              else
+              {
+                // 其他level
+              }
             }
             else
             {
+              // cout << seq1_id << endl;
+              thread_stats.total_error++;
             }
-          }
-          else if (real_internal_taxo)
-          {
-            //  其他类的
-            // cout << seq1_id << endl;
-            thread_stats.total_error++;
           }
           else
           {
@@ -625,7 +591,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
 }
 
 taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &add_map,
-                    ostringstream &koss)
+                    ostringstream &koss, AdditionalMap &thread_add_map)
 {
   taxid_t max_taxon = 0;
   double max_score = 0;
@@ -639,17 +605,28 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
     taxid_t taxon = kv_pair.first;
     double score = 0;
     sum_hits += kv_pair.second;
+    bool isLeaf = true;
     for (auto &kv_pair2 : hit_counts)
     {
       taxid_t taxon2 = kv_pair2.first;
 
       if (taxonomy.IsAAncestorOfB(taxon2, taxon))
       {
-
+        thread_add_map.leaf_count[taxon] += 1;
         score += kv_pair2.second;
       }
+      // 如果taxon是其中一个的祖先,则不是叶子节点
+      if (isLeaf && taxon != taxon2 && taxonomy.IsAAncestorOfB(taxon, taxon2))
+      {
+        isLeaf = false;
+      }
     }
-
+    // 如果是叶子节点,存入叶子vector
+    if (isLeaf)
+    {
+      // 加入叶子节点,但是不被选中
+      thread_add_map.leaf[taxon] = false;
+    }
     if (score > max_score)
     {
       max_score = score;
@@ -687,21 +664,39 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
       max_taxon = taxonomy.nodes()[max_taxon].parent_id;
   }
 
+  // 打印命中
+  // cout << "hit_counts ";
+  // for (auto &kv_pair : hit_counts)
+  // {
+  //   cout << taxonomy.nodes()[kv_pair.first].external_id << ":" << kv_pair.second << endl;
+  // }
   // 打印total_minimizers
   // cout << "sum_hits" << sum_hits << endl;
-  // cout << hit_counts[max_taxon] << endl;
+  // cout << taxonomy.nodes()[max_taxon].external_id << ":" << hit_counts[max_taxon] << endl;
 
-  //  最小的hit满足总命中的1/10
+  //  最小的hit满足总命中的 xx
+
   if (!opts.origin_mode)
   {
     hit_score = hit_counts[max_taxon];
-    double least_score = max_score * 0.1;
+    taxid_t origin_max_taxon = max_taxon;
+    double least_score = max_score * 0.05;
+    if (thread_add_map.leaf_count[max_taxon] <= 2)
+    {
+      return max_taxon;
+    }
     while (max_taxon && hit_score < least_score)
     {
       max_taxon = taxonomy.nodes()[max_taxon].parent_id;
       hit_score = hit_counts[max_taxon];
     }
+    if (hit_counts[origin_max_taxon] / hit_counts[max_taxon] >= 0.05)
+    {
+      max_taxon = origin_max_taxon;
+    }
   }
+  // 打印目标
+  // cout << taxonomy.nodes()[max_taxon].external_id << ":" << hit_counts[max_taxon] << endl;
   return max_taxon;
 }
 
@@ -719,12 +714,18 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                          KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
                          Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
                          vector<taxid_t> &taxa, taxon_counts_t &hit_counts, vector<string> &tx_frames,
-                         taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map)
+                         taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map, AdditionalMap &thread_add_map)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
   taxa.clear();
   hit_counts.clear();
+  //  在这里做初始化清空操作
+  thread_add_map.conflict_temp.clear();
+  thread_add_map.conflict_ancestor.clear();
+  thread_add_map.leaf.clear();
+  thread_add_map.leaf_count.clear();
+  thread_add_map.score_taxid.clear();
 
   auto frame_ct = opts.use_translated_search ? 6 : 1;
   int64_t minimizer_hit_groups = 0;
@@ -785,8 +786,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             // (b) minimizer != last minimizer
             if (taxon)
             {
-              // 打印命中
-              // cout << taxonomy.nodes()[taxon].external_id << ":" << weight << endl;
+
               minimizer_hit_groups++;
               // New minimizer should trigger registering minimizer in RC/HLL
               auto last = scanner.last_minimizer();
@@ -825,7 +825,7 @@ finished_searching:
   if (opts.use_translated_search) // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
 
-  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss);
+  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss, thread_add_map);
   // Void a call made by too few minimizer groups
   if (call && minimizer_hit_groups < opts.minimum_hit_groups)
     call = 0;
