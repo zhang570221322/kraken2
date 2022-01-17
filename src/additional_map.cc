@@ -106,8 +106,12 @@ namespace kraken2
         if (conflict_ump.find(minimizer) != conflict_ump.end())
         {
             weight = conflict_ump[minimizer];
+            return 13.0 - 0.05 * weight - log(child_count + 1);
         }
-        return 13.0 - 0.05 * weight - log(child_count + 1);
+        else
+        {
+            return 1.0;
+        }
     }
 
     void AdditionalMap::AddMinimizer(uint64_t minimizer)

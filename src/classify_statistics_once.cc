@@ -34,7 +34,12 @@ static const size_t NUM_FRAGMENTS_PER_THREAD = 10000;
 static const taxid_t MATE_PAIR_BORDER_TAXON = TAXID_MAX;
 static const taxid_t READING_FRAME_BORDER_TAXON = TAXID_MAX - 1;
 static const taxid_t AMBIGUOUS_SPAN_TAXON = TAXID_MAX - 2;
+struct Cseq_return
+{
 
+  taxid_t call;
+  uint64_t read_conflicts;
+};
 struct Options
 {
   string index_filename;
@@ -71,6 +76,7 @@ struct ClassificationStats
   uint64_t total_assegned_s; //number of reads assegned to rank species
   uint64_t total_dberror;    //记录数据库错误
   uint64_t total_error;      //记录错误
+  uint64_t total_conflict;   //记录冲突次数
 };
 
 struct OutputStreamData
@@ -100,14 +106,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
                   KeyValueStore *hash, Taxonomy &tax,
                   IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
                   OutputStreamData &outputs, taxon_counters_t &total_taxon_counters, AdditionalMap &add_map);
-taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
-                         KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
-                         Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
-                         vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-                         vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap &add_map, AdditionalMap &thread_add_map);
+Cseq_return ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
+                             KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
+                             Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
+                             vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
+                             vector<string> &tx_frames, taxon_counters_t &my_taxon_counts, AdditionalMap &add_map, AdditionalMap &thread_add_map);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa, Taxonomy &taxonomy);
-taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &tax, size_t total_minimizers,
-                    Options &opts, AdditionalMap &add_map, ostringstream &koss, AdditionalMap &thread_add_map);
+Cseq_return ResolveTree(taxon_counts_t &hit_counts, Taxonomy &tax, size_t total_minimizers,
+                        Options &opts, AdditionalMap &add_map, ostringstream &koss, AdditionalMap &thread_add_map);
 void ReportStats(struct timeval time1, struct timeval time2, ClassificationStats &stats);
 void InitializeOutputs(Options &opts, OutputStreamData &outputs, SequenceFormat format);
 void MaskLowQualityBases(Sequence &dna, int minimum_quality_score);
@@ -137,10 +143,9 @@ int main(int argc, char **argv)
   cerr << "opts.origin_mode : " << opts.origin_mode;
   cerr << "  Classify with conflict hash map" << endl;
 
-  cerr << "Loading conflict hashmap...";
   AdditionalMap add_map;
-  add_map.ReadConflictFile(opts.conflict_filename.c_str());
-  cerr << "done." << endl;
+
+  cerr << endl;
 
   // 加载金标准数据
   std::string data_binning = argv[optind];
@@ -168,7 +173,7 @@ int main(int argc, char **argv)
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
   cerr << "done." << endl;
 
-  ClassificationStats stats = {0, 0, 0, 0, 0};
+  ClassificationStats stats = {0, 0, 0, 0, 0, 0, 0, 0};
 
   OutputStreamData outputs = {false, false, nullptr, nullptr, nullptr, nullptr, &std::cout};
 
@@ -261,9 +266,10 @@ void ReportStats(struct timeval time1, struct timeval time2,
     cerr << "\r";
   fprintf(stderr, "\nGENERAL DATA\n");
   fprintf(stderr,
-          "%llu sequences (%.2f Mbp) processed in %.3fs (%.1f Kseq/m, %.2f Mbp/m).\n",
+          "%llu sequences (%.2f Mbp) (Find conflicts %lu times)  processed in %.3fs (%.1f Kseq/m, %.2f Mbp/m).  \n",
           (unsigned long long)stats.total_sequences,
           stats.total_bases / 1.0e6,
+          stats.total_conflict,
           seconds,
           stats.total_sequences / 1.0e3 / (seconds / 60),
           stats.total_bases / 1.0e6 / (seconds / 60));
@@ -338,14 +344,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
     vector<taxid_t> taxa;
     taxon_counts_t hit_counts;
     ostringstream kraken_oss, c1_oss, c2_oss, u1_oss, u2_oss;
-    ClassificationStats thread_stats = {0, 0, 0, 0, 0};
+    ClassificationStats thread_stats = {0, 0, 0, 0, 0, 0, 0, 0};
     vector<string> translated_frames(6);
     BatchSequenceReader reader1, reader2;
     Sequence seq1, seq2;
     uint64_t block_id;
     OutputData out_data;
     taxon_counters_t thread_taxon_counters;
-    //多线程计数
+    //多线程计数加冲突
     AdditionalMap thread_add_map;
 
     while (true)
@@ -357,7 +363,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
       thread_stats.total_assegned_s = 0;
       thread_stats.total_dberror = 0;
       thread_stats.total_error = 0;
-
+      thread_stats.total_conflict = 0;
       auto ok_read = false;
       thread_add_map.clearConflictObj();
 #pragma omp critical(seqread)
@@ -415,15 +421,15 @@ void ProcessFiles(const char *filename1, const char *filename2,
           if (opts.paired_end_processing)
             MaskLowQualityBases(seq2, opts.minimum_quality_score);
         }
-        auto call = ClassifySequence(seq1, seq2,
-                                     kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-                                     taxa, hit_counts, translated_frames, thread_taxon_counters, add_map, thread_add_map);
+        Cseq_return cs_return = ClassifySequence(seq1, seq2,
+                                                 kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
+                                                 taxa, hit_counts, translated_frames, thread_taxon_counters, add_map, thread_add_map);
         // 打印金标准
         // for (auto &kv_pair : add_map._seqID_taxID)
         // {
         //   cout << kv_pair.first << ":" << kv_pair.second << endl;
         // }
-
+        taxid_t call = cs_return.call;
         if (call)
         {
           char buffer[1024] = "";
@@ -486,6 +492,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
             u2_oss << seq2.to_string();
         }
         thread_stats.total_bases += seq1.seq.size();
+        thread_stats.total_conflict += cs_return.read_conflicts;
         if (opts.paired_end_processing)
           thread_stats.total_bases += seq2.seq.size();
       }
@@ -494,6 +501,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
       stats.total_sequences += thread_stats.total_sequences;
 #pragma omp atomic
       stats.total_bases += thread_stats.total_bases;
+#pragma omp atomic
+      stats.total_conflict += thread_stats.total_conflict;
 #pragma omp atomic
       stats.total_classified += thread_stats.total_classified;
 #pragma omp atomic
@@ -508,7 +517,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
       {
         if (isatty(fileno(stderr)))
           cerr << "\rProcessed " << stats.total_sequences
-               << " sequences (" << stats.total_bases << " bp) ...";
+               << " sequences (" << stats.total_bases << " bp)"
+               << " conflicts (" << stats.total_conflict << " times) ... ";
       }
 
       if (!outputs.initialized)
@@ -527,7 +537,16 @@ void ProcessFiles(const char *filename1, const char *filename2,
       {
         output_queue.push(out_data);
       }
+      // 合并所有的冲突的kmer
+#pragma omp critical(merge_conflict_map)
+      {
+        unordered_map<uint64_t, uint64_t> &shared_conflict_ump = add_map.conflict_ump;
 
+        for (auto &kv_pair : thread_add_map.conflict_ump)
+        {
+          shared_conflict_ump[kv_pair.first] += kv_pair.second;
+        }
+      }
 #pragma omp critical(update_taxon_counters)
       {
         for (auto &kv_pair : thread_taxon_counters)
@@ -590,15 +609,17 @@ void ProcessFiles(const char *filename1, const char *filename2,
     (*outputs.unclassified_output2) << std::flush;
 }
 
-taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &add_map,
-                    ostringstream &koss, AdditionalMap &thread_add_map)
+Cseq_return ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total_minimizers, Options &opts, AdditionalMap &add_map,
+                        ostringstream &koss, AdditionalMap &thread_add_map)
 {
   taxid_t max_taxon = 0;
   double max_score = 0;
   double sum_hits = 0;
 
   uint32_t required_score = ceil(opts.confidence_threshold * total_minimizers);
-
+  // 取到引用,存储最终的剪枝树分数.
+  unordered_map<double, vector<taxid_t>> &score_taxid = thread_add_map.score_taxid;
+  uint64_t conflicts = 0;
   // Sum each taxon's LTR path, find taxon with highest LTR score
   for (auto &kv_pair : hit_counts)
   {
@@ -637,6 +658,7 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
     {
       max_taxon = taxonomy.LowestCommonAncestor(max_taxon, taxon);
     }
+    score_taxid[score].push_back(taxon);
   }
 
   // Reset max. score to be only hits at the called taxon
@@ -674,31 +696,31 @@ taxid_t ResolveTree(taxon_counts_t &hit_counts, Taxonomy &taxonomy, size_t total
   // cout << "sum_hits" << sum_hits << endl;
   // cout << taxonomy.nodes()[max_taxon].external_id << ":" << hit_counts[max_taxon] << endl;
 
-  // 如果返回的没命中,需要返回其parent
-  while (max_taxon && !hit_counts[max_taxon])
-  {
-
-    max_taxon = taxonomy.nodes()[max_taxon].parent_id;
-  }
   //  最小的hit满足总命中的 xx
+
   if (!opts.origin_mode)
   {
     hit_score = hit_counts[max_taxon];
     taxid_t origin_max_taxon = max_taxon;
-    while (max_taxon && hit_score < max_score * 0.1)
+    double least_score = max_score * 0.05;
+    if (thread_add_map.leaf_count[max_taxon] <= 2)
+    {
+      return {max_taxon, conflicts};
+    }
+    while (max_taxon && hit_score < least_score)
     {
       max_taxon = taxonomy.nodes()[max_taxon].parent_id;
       hit_score = hit_counts[max_taxon];
     }
-    if (hit_counts[origin_max_taxon] / hit_counts[max_taxon] >= 2.0)
+    if (hit_counts[origin_max_taxon] / hit_counts[max_taxon] >= 0.05)
     {
       max_taxon = origin_max_taxon;
     }
   }
-
   // 打印目标
   // cout << taxonomy.nodes()[max_taxon].external_id << ":" << hit_counts[max_taxon] << endl;
-  return max_taxon;
+  thread_add_map.saveTemp(hit_counts, max_score, conflicts, taxonomy);
+  return {max_taxon, conflicts};
 }
 
 std::string TrimPairInfo(std::string &id)
@@ -711,11 +733,11 @@ std::string TrimPairInfo(std::string &id)
   return id;
 }
 
-taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
-                         KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
-                         Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
-                         vector<taxid_t> &taxa, taxon_counts_t &hit_counts, vector<string> &tx_frames,
-                         taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map, AdditionalMap &thread_add_map)
+Cseq_return ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
+                             KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
+                             Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
+                             vector<taxid_t> &taxa, taxon_counts_t &hit_counts, vector<string> &tx_frames,
+                             taxon_counters_t &curr_taxon_counts, AdditionalMap &add_map, AdditionalMap &thread_add_map)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
@@ -777,7 +799,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             if (!skip_lookup)
             {
               taxon = hash->Get(*minimizer_ptr);
-              if (add_map.GetConflictSize() != 0)
+              if (!opts.origin_mode)
                 weight = add_map.GetWeight(*minimizer_ptr, taxonomy.nodes()[taxon].child_count);
             }
             last_taxon = taxon;
@@ -826,8 +848,9 @@ finished_searching:
   if (opts.use_translated_search) // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
 
-  call = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss, thread_add_map);
+  Cseq_return cs_return = ResolveTree(hit_counts, taxonomy, total_kmers, opts, add_map, koss, thread_add_map);
   // Void a call made by too few minimizer groups
+  call = cs_return.call;
   if (call && minimizer_hit_groups < opts.minimum_hit_groups)
     call = 0;
 
@@ -881,7 +904,7 @@ finished_searching:
 
   koss << endl;
 
-  return call;
+  return {call, cs_return.read_conflicts};
 }
 
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
@@ -1138,5 +1161,5 @@ void usage(int exit_code)
        << "  -U filename      Filename/format to have unclassified sequences" << endl
        << "  -O filename      Output file for normal Kraken output" << endl
        << "  -K               In comb. w/ -R, provide minimizer information in report" << endl;
-  exit(exit_code);
+  std::exit(exit_code);
 }
