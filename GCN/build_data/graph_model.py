@@ -1,7 +1,23 @@
 
 import pdb
-import pickle
+from time import time
+import functools
 DEFAULT_K = 5
+
+
+def log_time(text=""):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kw):
+            # 定义开始时间
+            start = time()
+            res = func(*args, **kw)
+            # 定义结束时间
+            end = time()
+            print(f'{text} {func.__name__}() execute time: {end-start:.2f}s')
+            return res
+        return wrapper
+    return decorator
 
 
 class Read:
@@ -64,7 +80,7 @@ class ReadGenerator:
 
     def Kmer_index_Generator(self, read, k=DEFAULT_K):
         dp_length = len(read.seq)
-        if(dp_length) < 8:
+        if(dp_length) < k:
             raise Exception(f"The sequence {read.id} dp < {k}!!")
         start = 0
         end = k
