@@ -1,37 +1,43 @@
-from model import GCN, Arg
+from model_line import FC, Arg
 import torch
 from torch import nn
 import random
-from handle_data import getdata, load_array, my_plot
+from handle_data import getdata, load_array, my_plot,de_to_dense
 import pdb
+import numpy as np
 random.seed(32)
 
 
-arg = Arg(20, 0.01, 0.75, 1000)
-# device = torch.device('cuda:1')
+arg = Arg(30, 0.005, 0.75, 200)
+# device = torch.device('cpu')
 device = torch.device('cuda:1')
 # data
 print("start to load data...")
-train_data, test_data = getdata()
-# x, adj, y = train_data
-# train_count = 10000
-# test_count = train_count+1000
-# train_iter = load_array(
-#     (x[:train_count], adj[:train_count], y[:train_count]), arg.batch_size)
-# test_data = (x[train_count:test_count],
-#              adj[train_count:test_count], y[train_count:test_count])
+train_data,output_dim, test_data = getdata()
+ 
 
 train_iter = load_array(train_data, arg.batch_size)
 print("load data done!")
-
+# input_dim = train_data[0].shape[2]
 # model
-net = GCN(18, 18).to(device)
+net = FC(1024, output_dim).to(device)
+# loss = nn.CrossEntropyLoss()
 loss = nn.MSELoss()
 # 测试数据
-test_x, test_adj, test_y = test_data
-test_x = test_x.to(device)
-test_adj = test_adj.float().to(device)
-test_y = test_y.squeeze().to(device)
+test_x,test_adj,test_y=test_data
+# test_iter = load_array(test_data, arg.batch_size*2)
+
+def test_net(X,adj,test_y):
+    X = X.float().to(device)
+    adj = adj.float().to(device)
+    test_y =test_y.to(device)
+    predi_rl=net((X, adj))
+    l = loss(predi_rl, test_y) 
+    print_loss = float(l)
+    test_y = test_y.cpu().detach().numpy()
+    predi_label = predi_rl.max(axis=1).indices.cpu().detach().numpy()
+    acc = (predi_label == test_y).sum() / len(test_y)
+    return print_loss,acc
 # Adam
 optimizer = torch.optim.Adam(net.parameters(),
                              lr=arg.learning_rate,
@@ -41,20 +47,20 @@ acc_record = []
 for epoch in range(arg.num_epochs):
     net.train()
     for X, adj, y in train_iter:
-        X = X.to(device)
-        adj = adj.float().to(device)
+        # adj=de_to_dense(adj)
+        X = X.to(device).float()
+        adj = adj.to(device).float()
         y = y.to(device)
-        y=y.squeeze()
+        res=net((X, adj))
+        l = loss(res, y) 
         optimizer.zero_grad()
-        l = loss(net((X, adj)), y) 
         l.backward()
         optimizer.step()
     net.eval()
-    test_rl = net((test_x, test_adj))
-    print_loss = float(loss(test_rl, test_y).cpu().detach().numpy())
-    real_label = test_rl.max(axis=1).indices.cpu().detach().numpy()
-    test_label = test_y.max(axis=1).indices.cpu().detach().numpy()
-    acc = (test_label == real_label).sum() / len(test_label)
+    # pdb.set_trace()
+    # for X, adj, test_y in test_iter:
+    print_loss,acc =test_net(test_x,test_adj,test_y)
     loss_record.append(print_loss)
     acc_record.append(acc)
+    print(print_loss," ",acc)
 my_plot(list(range(len(loss_record))), loss_record, acc_record, arg=arg)

@@ -10,3 +10,4 @@ src/classify_phase
 classify_statistics
 __*
 __pycache__
+*.jpg

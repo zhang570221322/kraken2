@@ -6,6 +6,29 @@ import matplotlib.pyplot as plt
 import arrow
 import torch
 
+def de_to_dense(adj):
+    res=[]
+    for index in range(adj.shape[0]):
+        res.append(adj[index].to_dense())
+    return torch.stack(res,0)
+def csc_adj_to_torch_spares(test,train_size):
+    res_train=[]
+    res_test=[]
+    for index,adj in enumerate(test):
+        Acoo = adj.tocoo()
+        Apt = torch.sparse.LongTensor(torch.LongTensor([Acoo.row.tolist(), Acoo.col.tolist()]),
+                                    torch.LongTensor(Acoo.data.astype(np.int16)),torch.Size([1024,1024]))
+        if index < train_size:
+            res_train.append(Apt)
+        else:
+            res_test.append(Apt)
+    return torch.stack(res_train,0),torch.stack(res_test,0)
+def de_csc_adj(test):
+    res=[]
+    for adj in test:
+        Apt=torch.from_numpy(adj.toarray())
+        res.append(Apt)
+    return torch.stack(res,0)
 
 def my_plot(x, y1, y2, figsize=(20, 8), arg=None):
     plt.figure(figsize=figsize)
@@ -21,6 +44,10 @@ def my_plot(x, y1, y2, figsize=(20, 8), arg=None):
     file_name = arrow.now().format("YYYY_MM_DD_HH_mm_ss")
     plt.savefig(f"{file_name}.jpg")
 
+def standardization(data):
+    mu = np.mean(data, axis=0)
+    sigma = np.std(data, axis=0)
+    return (data - mu) / sigma
 
 def normalize_feature(features):
     """
@@ -36,44 +63,19 @@ def normalize_feature(features):
     return features
 
 
-def load_data():
-    preifx = "/home/yegpu/zwl/data/"
-    x1 = list(np.load(f"{preifx}/x1.npy", allow_pickle=True))
-    # 计算最大的N
-    N = 0
-    for temp_x1 in x1:
-        temp = len(temp_x1)
-        N = max(temp, N)
+def load_data(preifx = "/home/yegpu/zwl/data/8k_reads",data_size=8000):
+    x = np.load(f"{preifx}/x.npy", allow_pickle=True)[:data_size]
+    x = standardization(x)
     adjacent_matrixs = np.load(
-        f"{preifx}/adjacent_matrixs.npy", allow_pickle=True)
-    Y = list(np.load(f"{preifx}/Y.npy", allow_pickle=True))
-    # 还原x1,x2至x
-    for index, temp_x1 in enumerate(x1):
-        need = list(np.zeros((N-len(temp_x1),), dtype=np.float32))
-        x1[index] = [x1[index]+need]
-    X = np.asarray(x1, dtype=np.float32)
-    # 还原邻接矩阵
-    adjacent_matrixs_np = np.zeros((X.shape[0], N, N), dtype=np.int8)
-    for index, ab in enumerate(adjacent_matrixs):
-        for a, b in ab:
-            adjacent_matrixs_np[index, a, b] = 1
-    # 还原标签Y
-    for index, temp in enumerate(Y):
-        need = list(np.zeros((N-len(temp),), dtype=np.float32))
-        Y[index] = Y[index]+need
-    Y = np.asarray(Y, dtype=np.float32)
-    return X, adjacent_matrixs_np, Y
-
+        f"{preifx}/adjacent_matrixs.npy", allow_pickle=True)[:data_size]
+    Y = np.load(f"{preifx}/y_genus_one_hot.npy", allow_pickle=True)[:data_size]
+    return x, adjacent_matrixs, Y
 
 def handle_data():
-    X, adjacent_matrixs, Y = load_data()
-    X = normalize_feature(X)
-    X = X.transpose(0, 2, 1)
-
+    X, adj, Y = load_data()
     X = torch.from_numpy(X)
-    adj = torch.from_numpy(adjacent_matrixs)
+    X = X.unsqueeze(-1)
     Y = torch.from_numpy(Y)
-    Y = Y.unsqueeze(-1)
     return X, adj, Y
 
 
@@ -83,14 +85,30 @@ def load_array(data_arrays, batch_size, is_train=True):  # @save
     return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
 
-def getdata(train_ratio=0.999):
+def getdata(train_ratio=0.8):
     X, adj, Y = handle_data()
     train_size = int(train_ratio*len(X))
+    adj =de_csc_adj(adj)
+    out_dim = Y.shape[-1]
+    # Y = Y.max(axis=-1).indices
     # 用来训练
     train_data = (X[:train_size], adj[:train_size], Y[:train_size])
+    # train_data = (X, adj, Y)
     # 用来测试
     test_data = (X[train_size:], adj[train_size:], Y[train_size:])
+    return train_data,out_dim, test_data
+
+def getdata2(train_ratio=0.8):
+    X, adj, Y = handle_data()
+    train_size = int(train_ratio*len(X))
+    adj_train,adj_test = csc_adj_to_torch_spares(adj,train_size)
+    # 用来训练
+    train_data = (X[:train_size], adj_train, Y[:train_size])
+    # 用来测试
+    test_data = (X[train_size:], adj_test, Y[train_size:])
     return train_data, test_data
-
-
-# device = torch.device('cpu')
+# out_dir = "/home/yegpu/zwl/data/2k_reads"
+# x,adj,y = load_data()
+# np.save(f"{out_dir}/x", x[:2000])
+# np.save(f"{out_dir}/adjacent_matrixs", adj[:2000])
+# np.save(f"{out_dir}/y_genus_one_hot", y[:2000])
