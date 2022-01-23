@@ -2,7 +2,7 @@
 import pdb
 from time import time
 import functools
-DEFAULT_K = 5
+DEFAULT_K =3
 
 
 def log_time(text=""):
