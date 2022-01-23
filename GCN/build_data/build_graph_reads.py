@@ -1,8 +1,7 @@
 import os
 import pdb
-from scipy import sparse
-import numpy as np
-from graph_model import feature_space_init, ReadGenerator, DEFAULT_K, log_time
+from common import log_time
+from build_data.graph_model import feature_space_init, ReadGenerator, DEFAULT_K
 import copy
 import sys
 
@@ -18,13 +17,13 @@ def data_iter(batch, data):
         yield data[i: min(i + step_size, num_examples)]
 
 
-def set_value(adj_matrix, feature_index, read_kmers, end, tar_value, feature_space):
-    fea_target_feature = feature_space[read_kmers[end]][0]
-    value = abs(adj_matrix[feature_index][fea_target_feature])
-    if value == 0:
-        adj_matrix[feature_index][fea_target_feature] = tar_value
-    elif abs(value) > abs(tar_value):
-        adj_matrix[feature_index][fea_target_feature] = tar_value
+# def set_value(adj_matrix, feature_index, read_kmers, end, tar_value, feature_space):
+#     fea_target_feature = feature_space[read_kmers[end]][0]
+#     value = abs(adj_matrix[feature_index][fea_target_feature])
+#     if value == 0:
+#         adj_matrix[feature_index][fea_target_feature] = tar_value
+#     elif abs(value) > abs(tar_value):
+#         adj_matrix[feature_index][fea_target_feature] = tar_value
 
 
 def get_feature(file_name):
@@ -35,9 +34,7 @@ def get_feature(file_name):
     for read in read_generator.read_Generator():
         tax_id = 0
         feature_space = copy.deepcopy(feature_space_init)
-
         tax_id = read.id.split("|kraken:taxid|")[-1].split("_")[0]
-
         for kmer, _ in read_generator.Kmer_index_Generator(read):
             feature_space[kmer][1] += 1
             read_kmers.append(kmer)
@@ -74,27 +71,9 @@ def get_feature(file_name):
         u_v_weight_dic.clear()
 
 
-@log_time()
-def func(file_dir):
-    feature = []
-    adjacent_matrixs = []
-    Ys = []
-    count = 0
-    for x, adj, y in get_feature(file_dir):
-        feature.append(x)
-        adjacent_matrixs.append(adj)
-        Ys.append(y)
-        count += 1
-        if count == 8000:
-            break
-        if count % 100 == 0:
-            print(count)
-    np.save(f"{our_dir}/x", feature)
-    np.save(f"{our_dir}/adjacent_matrixs", adjacent_matrixs)
-    np.save(f"{our_dir}/y", Ys)
-
-
-if __name__ == "__main__":
-    our_dir = sys.argv[2]
-    file_dir = sys.argv[1]
-    func(file_dir)
+def get_read_length(file):
+    temp = os.popen(f"wc -l {file}").readline().split(" ")[0]
+    if temp.isdigit():
+        return int(temp)//4
+    else:
+        raise Exception(f"wc -l {file} return error")

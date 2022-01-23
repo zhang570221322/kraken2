@@ -2,52 +2,43 @@ import pdb
 import numpy as np
 import scipy.sparse as sp
 from torch.utils import data
-import matplotlib.pyplot as plt
-import arrow
 import torch
 
+
 def de_to_dense(adj):
-    res=[]
+    res = []
     for index in range(adj.shape[0]):
         res.append(adj[index].to_dense())
-    return torch.stack(res,0)
-def csc_adj_to_torch_spares(test,train_size):
-    res_train=[]
-    res_test=[]
-    for index,adj in enumerate(test):
+    return torch.stack(res, 0)
+
+
+def csc_adj_to_torch_spares(test, train_size):
+    res_train = []
+    res_test = []
+    for index, adj in enumerate(test):
         Acoo = adj.tocoo()
         Apt = torch.sparse.LongTensor(torch.LongTensor([Acoo.row.tolist(), Acoo.col.tolist()]),
-                                    torch.LongTensor(Acoo.data.astype(np.int16)),torch.Size([1024,1024]))
+                                      torch.LongTensor(Acoo.data.astype(np.int16)), torch.Size([1024, 1024]))
         if index < train_size:
             res_train.append(Apt)
         else:
             res_test.append(Apt)
-    return torch.stack(res_train,0),torch.stack(res_test,0)
-def de_csc_adj(test):
-    res=[]
-    for adj in test:
-        Apt=torch.from_numpy(adj.toarray())
-        res.append(Apt)
-    return torch.stack(res,0)
+    return torch.stack(res_train, 0), torch.stack(res_test, 0)
 
-def my_plot(x, y1, y2, figsize=(20, 8), arg=None):
-    plt.figure(figsize=figsize)
-    if arg:
-        text = f"num_epochs:{arg.num_epochs}\nlearning_rate:{arg.learning_rate}\nweight_decay:{arg.weight_decay}\nbatch_size:{arg.batch_size}"
-        plt.figtext(.00, .01,  text, fontsize=15)
-    plt.subplot(211)
-    plt.plot(x, y1, color='r', marker='.', linestyle='-')
-    plt.title("epoch/Loss")
-    plt.subplot(212)
-    plt.plot(x, y2, color='r', marker='.', linestyle='-')
-    plt.title("epoch/Acc")
-    file_name = arrow.now().format("YYYY_MM_DD_HH_mm_ss")
-    plt.savefig(f"{file_name}.jpg")
+
+def de_csc_adj(test):
+    res = []
+    for adj in test:
+        Apt = torch.from_numpy(adj.toarray())
+        res.append(Apt)
+    return torch.stack(res, 0)
+
 
 def standardization(data):
     mu = np.mean(data, axis=0)
     sigma = np.std(data, axis=0)
     return (data - mu) / sigma
+
 
 def normalize_feature(features):
     """
@@ -63,13 +54,14 @@ def normalize_feature(features):
     return features
 
 
-def load_data(preifx = "/home/yegpu/zwl/data/8k_reads",data_size=8000):
+def load_data(preifx="/home/yegpu/zwl/data/8k_reads", data_size=8000):
     x = np.load(f"{preifx}/x.npy", allow_pickle=True)[:data_size]
     x = standardization(x)
     adjacent_matrixs = np.load(
         f"{preifx}/adjacent_matrixs.npy", allow_pickle=True)[:data_size]
     Y = np.load(f"{preifx}/y_genus_one_hot.npy", allow_pickle=True)[:data_size]
     return x, adjacent_matrixs, Y
+
 
 def handle_data():
     X, adj, Y = load_data()
@@ -88,7 +80,7 @@ def load_array(data_arrays, batch_size, is_train=True):  # @save
 def getdata(train_ratio=0.8):
     X, adj, Y = handle_data()
     train_size = int(train_ratio*len(X))
-    adj =de_csc_adj(adj)
+    adj = de_csc_adj(adj)
     out_dim = Y.shape[-1]
     # Y = Y.max(axis=-1).indices
     # 用来训练
@@ -96,12 +88,13 @@ def getdata(train_ratio=0.8):
     # train_data = (X, adj, Y)
     # 用来测试
     test_data = (X[train_size:], adj[train_size:], Y[train_size:])
-    return train_data,out_dim, test_data
+    return train_data, out_dim, test_data
+
 
 def getdata2(train_ratio=0.8):
     X, adj, Y = handle_data()
     train_size = int(train_ratio*len(X))
-    adj_train,adj_test = csc_adj_to_torch_spares(adj,train_size)
+    adj_train, adj_test = csc_adj_to_torch_spares(adj, train_size)
     # 用来训练
     train_data = (X[:train_size], adj_train, Y[:train_size])
     # 用来测试

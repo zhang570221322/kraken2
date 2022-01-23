@@ -11,3 +11,5 @@ classify_statistics
 __*
 __pycache__
 *.jpg
+GCN/processed/*
+GCN/raw/*

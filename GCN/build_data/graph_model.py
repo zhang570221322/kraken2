@@ -1,23 +1,4 @@
-
-import pdb
-from time import time
-import functools
-DEFAULT_K =3
-
-
-def log_time(text=""):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kw):
-            # 定义开始时间
-            start = time()
-            res = func(*args, **kw)
-            # 定义结束时间
-            end = time()
-            print(f'{text} {func.__name__}() execute time: {end-start:.2f}s')
-            return res
-        return wrapper
-    return decorator
+DEFAULT_K = 3
 
 
 class Read:
@@ -109,9 +90,9 @@ class FeatureSpace(dict):
 
 
 feature_space_init = FeatureSpace()
-# test
-# file_name = "./test.fna"
-# read_generator = ReadGenerator(file_name, "fasta")
-# for read in read_generator.read_Generator():
-#     print(read.id)
-#     print(read.raw)
+if __name__ == "__main__":
+    file_name = "./test.fna"
+    read_generator = ReadGenerator(file_name, "fasta")
+    for read in read_generator.read_Generator():
+        print(read.id)
+        print(read.raw)
