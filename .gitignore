@@ -10,6 +10,8 @@ src/classify_phase
 classify_statistics
 __*
 __pycache__
+GCN/jpg
+GCN/data
+GCN/processed
+GCN/raw
 *.jpg
-GCN/processed/*
-GCN/raw/*
