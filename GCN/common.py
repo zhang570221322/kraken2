@@ -1,22 +1,36 @@
 # %%
+import torch
 import matplotlib.pyplot as plt
 import arrow
 from time import time
 import functools
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 
-def DataLoaderTqdm(data, batch_size, *arg, **kwarg):
+    
+def AUTO_INCREMENT(n=0):
+    while True:
+        yield n
+        n = n+1
+
+def standardization(data):
+    mu = torch.mean(data, axis=0)
+    sigma = torch.std(data, axis=0)
+    return (data - mu) / sigma
+
+
+def DataLoaderTqdm(data, *arg, **kwarg):
     length = len(data)
     batch_size = kwarg["batch_size"]
-    res = tqdm(DataLoader(data, *arg, batch_size=batch_size, **kwarg),
-               total=length//batch_size, unit=f"batch({batch_size})")
+    # res = tqdm(DataLoader(data, *arg, **kwarg),
+    #            total=length//batch_size, unit=f"batch({batch_size})")
+    res = DataLoader(data, *arg, **kwarg)
     return res
 
 
 def date_print(text):
-    print(print(f"{date_str()}:{text}"))
+    print(f"{date_str()}:{text}")
 
 
 def date_str(format="YYYY_MM_DD_HH_mm_ss"):
@@ -47,7 +61,8 @@ class Arg:
 
 
 def my_plot(*args, **kwargs, ):
-    arg = kwargs["arg"]
+    
+    arg = kwargs.get("arg")
     args = list(args)
     titles = args.pop()
     nums_plot = len(args)

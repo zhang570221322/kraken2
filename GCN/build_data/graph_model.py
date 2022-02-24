@@ -1,6 +1,18 @@
 DEFAULT_K = 3
 
-
+KMER_DIC = {
+    "A":0,
+    "T":1,
+    "C":2,
+    "G":3,
+    "a":0,
+    "t":1,
+    "c":2,
+    "g":3,
+    
+}
+def feature_str(read):
+    return [ KMER_DIC[ch] for ch in read]
 class Read:
     def __init__(self, _id, seq, annotation, quality, raw):
         self.id = _id
@@ -61,12 +73,13 @@ class ReadGenerator:
 
     def Kmer_index_Generator(self, read, k=DEFAULT_K):
         dp_length = len(read.seq)
+        seq_feature = feature_str(read.seq)
         if(dp_length) < k:
             raise Exception(f"The sequence {read.id} dp < {k}!!")
         start = 0
         end = k
         while end <= dp_length:
-            yield read.seq[start:end], (start, end)
+            yield read.seq[start:end], (start, end),seq_feature[start:end]
             start += 1
             end += 1
 
@@ -76,6 +89,7 @@ class FeatureSpace(dict):
         super().__init__()
         self.k = k
 
+    def init(self):
         def generater(temp, k):
             if len(temp) == k:
                 self["".join(temp)] = [0]
@@ -85,8 +99,8 @@ class FeatureSpace(dict):
                 generater(temp, k)
                 temp.pop()
         generater([], self.k)
-        for index, k in enumerate(self.keys()):
-            self[k] = [index, 0]
+        for index, kmer in enumerate(self.keys()):
+            self[kmer] = [index, 0,0]+feature_str(kmer)
 
 
 feature_space_init = FeatureSpace()

@@ -4,7 +4,7 @@ from autogl.datasets import  utils
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from common import Arg, my_plot, DataLoaderTqdm,log_time
-from ReadsDataSet2 import ReadsDataSet
+from ReadsDataSet1 import ReadsDataSet
 import torch,random
 from torch import nn
 import numpy as np

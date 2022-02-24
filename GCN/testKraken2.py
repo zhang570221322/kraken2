@@ -1,10 +1,8 @@
 
 from modelGCN import *
 from autogl.datasets import  utils
-from torch_geometric.loader import DataLoader
-from torch_geometric.datasets import TUDataset
 from common import Arg, my_plot, DataLoaderTqdm,log_time
-from ReadsDataSet2 import ReadsDataSet
+from ReadsDataSet_kraken2 import ReadsDataSet
 import torch,random
 from torch import nn
 import numpy as np
@@ -19,7 +17,7 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 
-arg = Arg(30, 0.000942607974725336, 0.75, 61)
+arg = Arg(15, 0.000942607974725336,0.0009, 1000)
 # data
 print("start to load data...")
 dataset = ReadsDataSet(root='./')
@@ -27,26 +25,24 @@ dataset= utils.graph_random_splits(dataset, train_ratio=0.8, val_ratio=0.1, seed
 len_dataset = len(dataset)
 train_dataset = dataset.train_split
 test_dataset = dataset.test_split
-
 train_loader = DataLoaderTqdm(train_dataset, batch_size=arg.batch_size)
 test_loader = DataLoaderTqdm(test_dataset, batch_size=arg.batch_size)
 print("load data done!")
 input_dim = dataset.num_features
-output_dim = dataset.num_classes
-# pdb.set_trace()
+output_dim = 1
 model = Net(input_dim,output_dim).to(device)
 optimizer = torch.optim.Adam(model.parameters(),
-                             lr=arg.learning_rate)
-                            #  weight_decay=arg.weight_decay)
-crit = nn.CrossEntropyLoss()
+                             lr=arg.learning_rate,
+                             weight_decay=arg.weight_decay)
+crit = nn.MSELoss()
 # @log_time("train")
 def train():
     model.train()
     loss_all = 0
     for data in train_loader:
         data = data.to(device)
-        output = model(data)
-        label = data.y.to(device).long()
+        output = model(data).squeeze()
+        label = data.y.to(device).float()
         loss = crit(output, label)
         loss.backward()
         loss_all += loss.item()
@@ -63,13 +59,14 @@ def evaluate(loader):
     with torch.no_grad():
         for data in loader:
             data = data.to(device)
-            pred = model(data).detach().cpu().numpy()
+            pred = model(data)
+            pred = pred.squeeze().detach().cpu().numpy()
             label = data.y.detach().cpu().numpy()
             predictions.append(pred)
             labels.append(label)
     predictions = np.concatenate(predictions, axis=0)
-    predictions = predictions.argmax(axis=-1)
-    print(Counter(predictions),end=",")
+    predictions = np.ceil(predictions)
+    # print(Counter(predictions),end=",")
     labels = np.concatenate(labels, axis=0)
     # print(Counter(labels),end=",")
     acc = (labels==predictions).sum()/len(labels)
@@ -89,4 +86,4 @@ for epoch in range(arg.num_epochs):
     message=f'Epoch: {epoch+1}, Loss: {loss:.5f}, Train Auc: {train_acc:.5f} , Test Auc: {test_acc:.5f}'
     print(message)
 my_plot(loss_record, train_acc_record,test_acc_record, ["Loss", "Train Acc", "Test Acc"], arg=arg)
-torch.save(model.state_dict(),"./args/Bruijn_k28")
+torch.save(model.state_dict(),"./args/Kraken2")
