@@ -1,18 +1,22 @@
 DEFAULT_K = 3
 
 KMER_DIC = {
-    "A":0,
-    "T":1,
-    "C":2,
-    "G":3,
-    "a":0,
-    "t":1,
-    "c":2,
-    "g":3,
-    
+    "A": 0,
+    "T": 1,
+    "C": 2,
+    "G": 3,
+    "a": 0,
+    "t": 1,
+    "c": 2,
+    "g": 3,
+
 }
+
+
 def feature_str(read):
-    return [ KMER_DIC[ch] for ch in read]
+    return [KMER_DIC[ch] for ch in read]
+
+
 class Read:
     def __init__(self, _id, seq, annotation, quality, raw):
         self.id = _id
@@ -23,7 +27,7 @@ class Read:
 
 
 class ReadGenerator:
-    def __init__(self, file_name, seq_type="reads") -> None:
+    def __init__(self, file_name, seq_type="reads"):
         """[ReadGenerator]
         Args:
             file_name ([str]): [the file full name]
@@ -31,6 +35,12 @@ class ReadGenerator:
         """
         self.file_name = file_name
         self.seq_type = seq_type
+
+    def get_read_length(self):
+        count = 0
+        for _ in self.read_Generator():
+            count += 1
+        return count
 
     def read_Generator(self):
         seq_type = self.seq_type
@@ -79,7 +89,7 @@ class ReadGenerator:
         start = 0
         end = k
         while end <= dp_length:
-            yield read.seq[start:end], (start, end),seq_feature[start:end]
+            yield read.seq[start:end], (start, end), seq_feature[start:end]
             start += 1
             end += 1
 
@@ -100,7 +110,7 @@ class FeatureSpace(dict):
                 temp.pop()
         generater([], self.k)
         for index, kmer in enumerate(self.keys()):
-            self[kmer] = [index, 0,0]+feature_str(kmer)
+            self[kmer] = [index, 0, 0]+feature_str(kmer)
 
 
 feature_space_init = FeatureSpace()
