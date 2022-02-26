@@ -37,6 +37,8 @@ class ReadsDataSet(InMemoryDataset):
             reads_length = ReadGenerator(fastq_dir, "reads").get_read_length()
             y_handle = Y_Handle(fastq_dir)
             y_handle.muti_label_mode()
+            print(y_handle.ys_dic)
+            print(y_handle.tree)
             date_print(
                 f"Process files {fastq_dir}, Transform data to graph...")
             for x, adj, y, node_labels in tqdm(get_feature(fastq_dir), total=reads_length, unit="read"):
@@ -66,7 +68,6 @@ class ReadsDataSet(InMemoryDataset):
                 # plt.show()
         data, slices = self.collate(g_list)
         print(Counter(data.y.numpy()))
-        print(y_dic)
         torch.save((data, slices), self.processed_paths[0])
 
 

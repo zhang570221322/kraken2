@@ -1,5 +1,6 @@
 
 import pdb
+from tkinter.tix import Tree
 from common import log_time, AUTO_INCREMENT
 from build_data.graph_model import feature_space_init, ReadGenerator,  feature_str
 import copy
@@ -145,7 +146,7 @@ class Y_Handle():
             tax_id = read.id.split("|kraken:taxid|")[-1].split("_")[0]
             res.append(tax_id)
         if res:
-            return ncbi.get_topology(res,  intermediate_nodes=False)
+            return ncbi.get_topology(res,  intermediate_nodes=True)
         else:
             raise Exception(f"{file_name} length is zero.")
 
