@@ -168,7 +168,7 @@ class Y_Handle():
         return foo
 
     def one_hot_index(self):
-        y_dic = {-1: 0}
+        y_dic = {-1: 1}
 
         def foo(y):
             y_index = y_dic.get(y)
@@ -201,5 +201,5 @@ class Y_Handle():
         temp = ncbi.get_lineage(int(y))[tree_prefix_num:]
         temp = [_dic[taxid] for taxid in temp]
         res = np.pad(temp, (0, int(max_y)-len(temp)),
-                     'constant', constant_values=(-1))
+                     'constant', constant_values=(0))
         return res

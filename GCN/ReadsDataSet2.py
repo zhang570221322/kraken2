@@ -4,36 +4,15 @@ import torch
 from torch_geometric.utils import add_self_loops, to_networkx
 from torch_geometric.data import Data, InMemoryDataset
 from tqdm import tqdm
-from build_data.build_graph_reads import get_feature,get_feature2, DEFAULT_K, get_read_length
+from build_data.build_graph_reads import get_feature,get_feature2, Y_Handle
+from build_data.graph_model import ReadGenerator,DEFAULT_K
 from ete3 import NCBITaxa
 from collections import Counter
 import matplotlib.pyplot as plt
 import networkx as nx
 import pdb
 file_name_prefix="5class"
-ncbi = NCBITaxa()
-taxid_levelup_taxid={}
-def get_genus(tax_id):
-    target = taxid_levelup_taxid.get(tax_id,None)
-    if target!=None:
-        return target
-    loc = -1
-    temp = ncbi.get_lineage(tax_id)
-    target = temp[loc]
-    while ncbi.get_rank([target])[target] != "genus":
-        loc = loc-1
-        target = temp[loc]
-    taxid_levelup_taxid[tax_id]=target
-    return target
 
-y_dic = {-1:0}
-def one_hot_index(y):
-    y_index = y_dic.get(y)
-    if y_index == None:
-        y_dic[y] = y_dic[-1]
-        y_index = y_dic[-1]
-        y_dic[-1] =y_dic[-1]+1
-    return y_index
 class ReadsDataSet(InMemoryDataset):
     def __init__(self, root,  transform=None, pre_transform=None):
         super(ReadsDataSet, self).__init__(
@@ -54,13 +33,15 @@ class ReadsDataSet(InMemoryDataset):
         g_list = []
         print(self.__class__)
         for fastq_dir in self.raw_paths:
-            reads_length = get_read_length(fastq_dir)
+            reads_length = ReadGenerator(fastq_dir, "reads").get_read_length()
+            y_handle = Y_Handle(fastq_dir)
+            hot_index,y_dic= y_handle.one_hot_index()
             date_print(f"Process files {fastq_dir}, Transform data to graph...")
             for x, adj, y,node_labels in tqdm(get_feature2(fastq_dir), total=reads_length, unit="read"):
                 # y = get_genus(y)
                 # if y in [1870884,1485]:
                 #     continue
-                y_index = one_hot_index(y)
+                y_index = hot_index(y)
                 u, v, weight = adj
                 edge_index, edge_attr =  torch.tensor([u, v]) ,  torch.tensor(weight)
                 edge_index=edge_index.long()

@@ -1,8 +1,7 @@
-
-from modelGCN import *
+#%%
+from modelGCN1 import *
 from autogl.datasets import  utils
 from torch_geometric.loader import DataLoader
-from torch_geometric.datasets import TUDataset
 from common import Arg, my_plot, DataLoaderTqdm,log_time
 from ReadsDataSet1 import ReadsDataSet
 import torch,random
@@ -27,18 +26,18 @@ dataset= utils.graph_random_splits(dataset, train_ratio=0.8, val_ratio=0.1, seed
 len_dataset = len(dataset)
 train_dataset = dataset.train_split
 test_dataset = dataset.test_split
-
+#%%
 train_loader = DataLoaderTqdm(train_dataset, batch_size=arg.batch_size)
 test_loader = DataLoaderTqdm(test_dataset, batch_size=arg.batch_size)
 print("load data done!")
 input_dim = dataset.num_features
-output_dim = dataset.num_classes
+output_dim = 11
 # pdb.set_trace()
 model = Net(input_dim,output_dim).to(device)
 optimizer = torch.optim.Adam(model.parameters(),
                              lr=arg.learning_rate)
                             #  weight_decay=arg.weight_decay)
-crit = nn.CrossEntropyLoss()
+crit = nn.BCELoss()
 # @log_time("train")
 def train():
     model.train()
@@ -46,7 +45,10 @@ def train():
     for data in train_loader:
         data = data.to(device)
         output = model(data)
-        label = data.y.to(device).long()
+        label = data.y.to(device)
+        reshape_len=int(len(label)/output_dim)
+        label=label.reshape(reshape_len,output_dim).float()
+        # pdb.set_trace()
         loss = crit(output, label)
         loss.backward()
         loss_all += loss.item()
@@ -63,18 +65,16 @@ def evaluate(loader):
     with torch.no_grad():
         for data in loader:
             data = data.to(device)
-            pred = model(data).detach().cpu().numpy()
+            pred = model(data).round().detach().cpu().numpy()
             label = data.y.detach().cpu().numpy()
             predictions.append(pred)
             labels.append(label)
-    predictions = np.concatenate(predictions, axis=0)
-    predictions = predictions.argmax(axis=-1)
-    print(Counter(predictions),end=",")
+    predictions =  np.concatenate(predictions, axis=0).flatten()
     labels = np.concatenate(labels, axis=0)
-    # print(Counter(labels),end=",")
     acc = (labels==predictions).sum()/len(labels)
     return acc
-
+# def get_right_tax(data):
+    
 
 loss_record = []
 train_acc_record = []

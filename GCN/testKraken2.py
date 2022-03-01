@@ -60,12 +60,11 @@ def evaluate(loader):
         for data in loader:
             data = data.to(device)
             pred = model(data)
-            pred = pred.squeeze().detach().cpu().numpy()
+            pred = pred.squeeze().round().detach().cpu().numpy()
             label = data.y.detach().cpu().numpy()
             predictions.append(pred)
             labels.append(label)
     predictions = np.concatenate(predictions, axis=0)
-    predictions = np.ceil(predictions)
     # print(Counter(predictions),end=",")
     labels = np.concatenate(labels, axis=0)
     # print(Counter(labels),end=",")
