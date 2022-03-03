@@ -180,7 +180,7 @@ class Y_Handle():
 
     def _get_one_hot_dic(self):
         _dic = {}
-        def dfs(childrens, level):
+        def dfs(childrens):
             if not childrens:
                 return
             one_hot_index_inter, y_dic = self.one_hot_index()
