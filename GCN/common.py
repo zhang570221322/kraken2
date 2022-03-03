@@ -8,11 +8,28 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 
-    
+def get_tax_list(taxs, target):
+    pre = None
+    res = []
+    try:
+        for index, i in enumerate(target):
+            if i == 0:
+                continue
+            if pre:
+                res.append(taxs[index][pre-1][i-1])
+            else:
+                res.append(taxs[index][0][i-1])
+            pre = i
+    except Exception:
+        return res
+    return res
+
+
 def AUTO_INCREMENT(n=0):
     while True:
         yield n
         n = n+1
+
 
 def standardization(data):
     mu = torch.mean(data, axis=0)
@@ -61,7 +78,7 @@ class Arg:
 
 
 def my_plot(*args, **kwargs, ):
-    
+
     arg = kwargs.get("arg")
     args = list(args)
     titles = args.pop()

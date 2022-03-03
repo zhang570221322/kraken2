@@ -3,6 +3,8 @@ from ete3 import NCBITaxa
 import sys
 from sklearn import preprocessing
 y_dir = sys.argv[1]
+
+
 def get_genus(tax_id):
     loc = -1
     temp = ncbi.get_lineage(tax_id)
@@ -11,6 +13,8 @@ def get_genus(tax_id):
         loc = loc-1
         target = temp[loc]
     return target
+
+
 ncbi = NCBITaxa()
 y = np.load(y_dir, allow_pickle=True)
 for index, tax_id in enumerate(y):

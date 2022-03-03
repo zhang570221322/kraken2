@@ -2,10 +2,11 @@
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from modelGCN import *
-import random,numpy as np
+import random
+import numpy as np
 from common import my_plot
 from collections import Counter
-seed=12345
+seed = 12345
 device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 random.seed(seed)
 np.random.seed(seed)
@@ -21,7 +22,7 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 input_dim = dataset.num_features
 output_dim = dataset.num_classes
-model = Net2(input_dim,output_dim).to(device)
+model = Net2(input_dim, output_dim).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 criterion = torch.nn.CrossEntropyLoss()
 
@@ -38,6 +39,8 @@ def train():
         optimizer.step()  # Update parameters based on gradients.
         optimizer.zero_grad()  # Clear gradients.
     return loss_all / len(train_dataset)
+
+
 def evaluate(loader):
     model.eval()
     predictions = []
@@ -52,10 +55,10 @@ def evaluate(loader):
             labels.append(label)
     predictions = np.concatenate(predictions, axis=0)
     predictions = predictions.argmax(axis=-1)
-    print(Counter(predictions),end=",")
+    print(Counter(predictions), end=",")
     labels = np.concatenate(labels, axis=0)
-    print(Counter(labels),end=",")
-    acc = (labels==predictions).sum()/len(labels)
+    print(Counter(labels), end=",")
+    acc = (labels == predictions).sum()/len(labels)
     return acc
 
 
@@ -67,6 +70,6 @@ for epoch in range(1, 15):
     test_acc = evaluate(test_loader)
     loss_record.append(loss)
     test_acc_record.append(test_acc)
-    message=f'Epoch: {epoch+1}, Loss: {loss:.5f},   Test Auc: {test_acc:.5f}'
+    message = f'Epoch: {epoch+1}, Loss: {loss:.5f},   Test Auc: {test_acc:.5f}'
     print(message)
 my_plot(loss_record, test_acc_record, ["Loss",  "Test Acc"])
