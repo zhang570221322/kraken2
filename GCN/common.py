@@ -9,19 +9,14 @@ from tqdm import tqdm
 
 
 def get_tax_list(taxs, target):
-    pre = None
+    pre = taxs["root"]
     res = []
-    try:
-        for index, i in enumerate(target):
-            if i == 0:
-                continue
-            if pre:
-                res.append(taxs[index][pre-1][i-1])
-            else:
-                res.append(taxs[index][0][i-1])
-            pre = i
-    except Exception:
-        return res
+    for i in target:
+        if i == 0:
+            continue
+        tax = taxs[pre][i-1]
+        res.append(tax)
+        pre = tax
     return res
 
 

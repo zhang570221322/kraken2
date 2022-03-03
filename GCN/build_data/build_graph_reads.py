@@ -140,7 +140,6 @@ class Y_Handle():
     def _get_ys_tree(self):
         file_name = self.file_name
         read_generator = ReadGenerator(file_name, "reads")
-        feature_space_init.init()
         res = []
         for read in read_generator.read_Generator():
             tax_id = read.id.split("|kraken:taxid|")[-1].split("_")[0]
@@ -181,23 +180,27 @@ class Y_Handle():
 
     def _get_one_hot_dic(self):
         _dic = {}
-        level_tax = {}
-
         def dfs(childrens, level):
             if not childrens:
                 return
             one_hot_index_inter, y_dic = self.one_hot_index()
-            tax_names = []
             for tax in childrens:
                 one_hot_index_inter(tax.taxid)
-                tax_names.append(tax.name)
-                dfs(tax.get_children(), level+1)
-            temp = level_tax.setdefault(level, [])
-            temp.append(tax_names)
+                dfs(tax.get_children())
             _dic.update(y_dic)
         childrens = self.tree.get_children()
-        dfs(childrens, 0)
-        return _dic, level_tax
+        dfs(childrens)
+        queue = [self.tree]
+        res = {"root": self.tree.taxid}
+        while queue:
+            temp = queue.pop(0)
+            level = []
+            for tax in temp.get_children():
+                level.append(tax.taxid)
+                queue.append(tax)
+            if level:
+                res[temp.taxid]= level
+        return _dic,res
 
     def get_linear_one_hot(self, y):
         _dic = self.ys_dic

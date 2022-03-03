@@ -48,6 +48,7 @@ class ReadsDataSet(InMemoryDataset):
                 # y = get_genus(y)
                 # if y in [1870884,1485]:
                 #     continue
+                tax=y
                 y_index = y_handle.get_linear_one_hot(y)
                 u, v, weight = adj
                 # edge_index, edge_attr = add_self_loops(
@@ -59,7 +60,7 @@ class ReadsDataSet(InMemoryDataset):
                 x = torch.tensor(x, dtype=torch.float)
                 # x = standardization(x)
                 y = torch.tensor(y_index)
-                g = Data(x=x, edge_index=edge_index, edge_attr=None, y=y)
+                g = Data(x=x, edge_index=edge_index, edge_attr=None, y=y,tax=tax)
                 g_list.append(g)
                 # pdb.set_trace()
                 # # #vision
@@ -78,6 +79,13 @@ class ReadsDataSet(InMemoryDataset):
 
 # %%
 if __name__ == "__main__":
+    from common import get_tax_list 
     dataset = ReadsDataSet("./")
-
+    taxs=dataset.level_tax
+    error=[]
+    for data in dataset:
+        temp=get_tax_list(taxs,list(data.y.numpy()))[-1]
+        if int(temp) !=  data.tax.item():
+            pdb.set_trace()
+            error.append(data)
 # %%
