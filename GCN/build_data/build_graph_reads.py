@@ -133,7 +133,7 @@ class Y_Handle():
 
     def muti_label_mode(self):
         self.tree = self._get_ys_tree()
-        self.ys_dic = self._get_one_hot_dic()
+        self.ys_dic, self.level_tax = self._get_one_hot_dic()
         self.tree_prefix_num = len(self.tree.lineage)
         self.max_y = self.tree.get_farthest_leaf()[1]
 
@@ -181,18 +181,23 @@ class Y_Handle():
 
     def _get_one_hot_dic(self):
         _dic = {}
+        level_tax = {}
 
-        def dfs(childrens):
+        def dfs(childrens, level):
             if not childrens:
                 return
             one_hot_index_inter, y_dic = self.one_hot_index()
+            tax_names = []
             for tax in childrens:
                 one_hot_index_inter(tax.taxid)
-                dfs(tax.get_children())
+                tax_names.append(tax.name)
+                dfs(tax.get_children(), level+1)
+            temp = level_tax.setdefault(level, [])
+            temp.append(tax_names)
             _dic.update(y_dic)
         childrens = self.tree.get_children()
-        dfs(childrens)
-        return _dic
+        dfs(childrens, 0)
+        return _dic, level_tax
 
     def get_linear_one_hot(self, y):
         _dic = self.ys_dic

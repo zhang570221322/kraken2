@@ -4,9 +4,10 @@ import torch
 from torch_geometric.utils import add_self_loops, to_networkx
 from torch_geometric.data import Data, InMemoryDataset
 from tqdm import tqdm
-from build_data.build_graph_reads import get_feature, get_feature2,Y_Handle
+from build_data.build_graph_reads import get_feature, get_feature2, Y_Handle
 from build_data.graph_model import ReadGenerator, DEFAULT_K
 from collections import Counter
+import pickle
 import matplotlib.pyplot as plt
 import networkx as nx
 import pdb
@@ -18,6 +19,8 @@ class ReadsDataSet(InMemoryDataset):
         super(ReadsDataSet, self).__init__(
             root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
+        with open(self.processed_paths[0]+"_level_tax", 'rb') as f:
+            self.level_tax = pickle.load(f)
 
     @property
     def raw_file_names(self):
@@ -69,6 +72,8 @@ class ReadsDataSet(InMemoryDataset):
         data, slices = self.collate(g_list)
         print(Counter(data.y.numpy()))
         torch.save((data, slices), self.processed_paths[0])
+        with open(self.processed_paths[0]+"_level_tax", 'wb') as f:
+            pickle.dump(y_handle.level_tax, f)
 
 
 # %%
