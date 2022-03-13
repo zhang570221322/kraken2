@@ -6,19 +6,31 @@ from time import time
 import functools
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
+import pdb
 
-
-def get_tax_list(taxs, target):
-    pre = taxs["root"]
-    res = []
-    for i in target:
-        if i == 0:
-            continue
-        tax = taxs[pre][i-1]
-        res.append(tax)
-        pre = tax
-    return res
-
+def get_tax_list(taxs, target,mode=1):
+    if mode==1:
+        pre = taxs["root"]
+        res = []
+        try:
+            for i in target:
+                i = int(i)
+                if i == 0:
+                    return res
+                tax = taxs[pre][i-1]
+                res.append(tax)
+                pre = tax
+        except KeyError as err:
+            return res
+        except IndexError as err :
+            return res
+        return res
+    elif mode == 2:
+        res = []
+        for first,second in enumerate(target):
+            key = f"{first}_{second}"
+            res.append(taxs[key])
+        return res
 
 def AUTO_INCREMENT(n=0):
     while True:

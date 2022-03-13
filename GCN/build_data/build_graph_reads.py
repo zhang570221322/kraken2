@@ -131,9 +131,12 @@ class Y_Handle():
     def __init__(self, file_name):
         self.file_name = file_name
 
-    def muti_label_mode(self):
+    def muti_label_mode(self,mode=1):
         self.tree = self._get_ys_tree()
-        self.ys_dic, self.level_tax = self._get_one_hot_dic()
+        if mode == 1:
+            self.ys_dic, self.level_tax,self.level_dim = self._get_one_hot_dic()
+        elif mode == 2:
+            self.ys_dic, self.level_tax,self.level_dim = self._get_one_hot_dic2()
         self.tree_prefix_num = len(self.tree.lineage)
         self.max_y = self.tree.get_farthest_leaf()[1]
 
@@ -177,19 +180,51 @@ class Y_Handle():
                 y_dic[-1] = y_dic[-1]+1
             return y_index
         return foo, y_dic
+    def _get_one_hot_dic2(self):
+        res = {}
+        def dfs(childrens, level):
+            if not childrens:
+                return
+            for tax in childrens:
+                tax_id = tax.taxid
+                dfs(tax.get_children(), level+1)
+                if level in res:
+                    res[level].append(tax_id)
+                else:
+                    res[level] = [tax_id]
+        childrens = self.tree.get_children()
+        dfs(childrens,0)
+        _dim={}
+        _dic={}
+        _level_tax={}
+        for level,v in res.items():
+            _dim[level]= len(v)+1
+            one_hot_index_inter, y_dic = self.one_hot_index()
+            for tax in v:
+                index = one_hot_index_inter(tax)
+                _level_tax[f"{level}_{index}"]= tax
+            _level_tax[f"{level}_0"] = 0
+            _dic.update(y_dic)
+        
+        return _dic,_level_tax,_dim
 
     def _get_one_hot_dic(self):
         _dic = {}
-        def dfs(childrens):
+        _dim = {}
+        def dfs(childrens,level):
             if not childrens:
                 return
             one_hot_index_inter, y_dic = self.one_hot_index()
             for tax in childrens:
                 one_hot_index_inter(tax.taxid)
-                dfs(tax.get_children())
+                dfs(tax.get_children(),level+1)
             _dic.update(y_dic)
+            if level in _dim:
+                _dim[level] = max(_dim[level],y_dic[-1])
+            else:
+                _dim[level] = y_dic[-1]
         childrens = self.tree.get_children()
-        dfs(childrens)
+        dfs(childrens,0)
         queue = [self.tree]
         res = {"root": self.tree.taxid}
         while queue:
@@ -200,14 +235,14 @@ class Y_Handle():
                 queue.append(tax)
             if level:
                 res[temp.taxid]= level
-        return _dic,res
+        return _dic,res,_dim
 
     def get_linear_one_hot(self, y):
         _dic = self.ys_dic
         tree_prefix_num = self.tree_prefix_num
         max_y = int(self.max_y)
-        temp = ncbi.get_lineage(int(y))[tree_prefix_num:]
-        temp = [_dic[taxid] for taxid in temp]
+        ncbi_lineage = ncbi.get_lineage(int(y))[tree_prefix_num:]
+        temp = [_dic[taxid] for taxid in ncbi_lineage]
         res = np.pad(temp, (0, int(max_y)-len(temp)),
                      'constant', constant_values=(0))
-        return res
+        return res,ncbi_lineage

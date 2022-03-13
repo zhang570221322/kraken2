@@ -20,7 +20,9 @@ class ReadsDataSet(InMemoryDataset):
             root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
         with open(self.processed_paths[0]+"_level_tax", 'rb') as f:
-            self.level_tax = pickle.load(f)
+            temp = pickle.load(f)
+            self.level_tax = temp[0]
+            self.level_dim = temp[1]
 
     @property
     def raw_file_names(self):
@@ -39,7 +41,7 @@ class ReadsDataSet(InMemoryDataset):
         for fastq_dir in self.raw_paths:
             reads_length = ReadGenerator(fastq_dir, "reads").get_read_length()
             y_handle = Y_Handle(fastq_dir)
-            y_handle.muti_label_mode()
+            y_handle.muti_label_mode(mode=2)
             print(y_handle.ys_dic)
             print(y_handle.tree)
             date_print(
@@ -48,8 +50,10 @@ class ReadsDataSet(InMemoryDataset):
                 # y = get_genus(y)
                 # if y in [1870884,1485]:
                 #     continue
-                tax=y
-                y_index = y_handle.get_linear_one_hot(y)
+                
+                y_index,ncbi_lineage = y_handle.get_linear_one_hot(y)
+                # tax=y
+                tax=torch.tensor(ncbi_lineage[-1])
                 u, v, weight = adj
                 # edge_index, edge_attr = add_self_loops(
                 #     torch.tensor([u, v]), torch.tensor(weight), fill_value=1, num_nodes=4**DEFAULT_K)
@@ -71,10 +75,10 @@ class ReadsDataSet(InMemoryDataset):
                 # nx.draw_networkx_labels(G,pos = pos, labels = {})
                 # plt.show()
         data, slices = self.collate(g_list)
-        print(Counter(data.y.numpy()))
+        print(Counter(data.tax.numpy()))
         torch.save((data, slices), self.processed_paths[0])
         with open(self.processed_paths[0]+"_level_tax", 'wb') as f:
-            pickle.dump(y_handle.level_tax, f)
+            pickle.dump([y_handle.level_tax,y_handle.level_dim], f)
 
 
 # %%
@@ -84,8 +88,8 @@ if __name__ == "__main__":
     taxs=dataset.level_tax
     error=[]
     for data in dataset:
-        temp=get_tax_list(taxs,list(data.y.numpy()))[-1]
-        if int(temp) !=  data.tax.item():
-            pdb.set_trace()
+        temp=get_tax_list(taxs,list(data.y.numpy()),mode=2)[-1]
+        if int(temp) !=  data.tax[-1].item():
             error.append(data)
+    print(len(error))
 # %%
