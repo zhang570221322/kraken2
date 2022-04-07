@@ -22,7 +22,7 @@ class ReadsDataSet(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['kraken2.dataset']
+        return ['dp1_kraken2.dataset']
 
     def download(self):
         pass

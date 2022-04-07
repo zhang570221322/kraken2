@@ -1,6 +1,5 @@
 
 import pdb
-from tkinter.tix import Tree
 from common import log_time, AUTO_INCREMENT
 from build_data.graph_model import feature_space_init, ReadGenerator,  feature_str
 import copy

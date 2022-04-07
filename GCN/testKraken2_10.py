@@ -1,8 +1,9 @@
 
+#%%
 from modelGCN import *
 from autogl.datasets import  utils
 from common import Arg, my_plot, DataLoaderTqdm,log_time
-from ReadsDataSet_kraken2 import ReadsDataSet
+from ReadsDataSet_kraken_all import ReadsDataSet
 import torch,random
 from torch import nn
 import numpy as np
@@ -17,7 +18,7 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 
-arg = Arg(15, 0.000942607974725336,0.0009, 2000)
+arg = Arg(70, 0.000942607974725336,0.0009, 8)
 # data
 print("start to load data...")
 dataset = ReadsDataSet(root='./')
@@ -32,28 +33,23 @@ input_dim = dataset.num_features
 output_dim = 1
 model = Net(input_dim,output_dim).to(device)
 optimizer = torch.optim.Adam(model.parameters(),
-                             lr=arg.learning_rate,
-                             weight_decay=arg.weight_decay)
+                             lr=arg.learning_rate)
+                            #  weight_decay=arg.weight_decay)
 crit = nn.MSELoss()
 # @log_time("train")
 def train():
     model.train()
     loss_all = 0
-    i=0
-    print("strat train")
     for data in train_loader:
-        print(i,end=",")
-        i+=1
         data = data.to(device)
         output = model(data).squeeze()
         label = data.y.to(device).float()
-        loss = crit(output, label)
+        loss = crit(output, label)*1000
         loss.backward()
         loss_all += loss.item()
         optimizer.step()
         optimizer.zero_grad()
         # print(loss.item())
-    print()
     return loss_all / len(train_dataset)
 
 # @log_time("evaluate")
@@ -72,22 +68,22 @@ def evaluate(loader):
             labels.append(label)
     predictions = np.concatenate(predictions, axis=0)
     labels = np.concatenate(labels, axis=0)
-    print(Counter(predictions),Counter(labels))
+    print(Counter(predictions), Counter(labels))
     acc = (labels==predictions).sum()/len(labels)
     return acc
-
+#%%
 
 loss_record = []
 train_acc_record = []
 test_acc_record = []
 for epoch in range(arg.num_epochs):
     loss = train()
-    # train_acc = evaluate(train_loader)
+    train_acc = evaluate(train_loader)
     test_acc = evaluate(test_loader)
     loss_record.append(loss)
-    # train_acc_record.append(train_acc)
+    train_acc_record.append(train_acc)
     test_acc_record.append(test_acc)
-    message=f'Epoch: {epoch+1}, Loss: {loss:.5f} , Test Auc: {test_acc:.5f}'
+    message=f'Epoch: {epoch+1}, Loss: {loss:.5f}, Train Auc: {train_acc:.5f} , Test Auc: {test_acc:.5f}'
     print(message)
-my_plot(loss_record,test_acc_record, ["Loss", "Test Acc"], arg=arg)
-# torch.save(model.state_dict(),"./args/Kraken2")
+my_plot(loss_record, train_acc_record,test_acc_record, ["Loss", "Train Acc", "Test Acc"], arg=arg)
+torch.save(model.state_dict(),"./args/Kraken2")
