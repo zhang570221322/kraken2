@@ -5,6 +5,9 @@ from build_data.graph_model import feature_space_init, ReadGenerator,  feature_s
 import copy
 from ete3 import NCBITaxa
 import numpy as np
+from load_ncbi_taxinfo import get_id_path,taxonomy
+ 
+
 ncbi = NCBITaxa()
 
 kmer_encode_dic = {}
@@ -142,12 +145,13 @@ class Y_Handle():
     def _get_ys_tree(self):
         file_name = self.file_name
         read_generator = ReadGenerator(file_name, "reads")
-        res = []
+        res = set()
         for read in read_generator.read_Generator():
             tax_id = read.id.split("|kraken:taxid|")[-1].split("_")[0]
-            res.append(tax_id)
+            for id_path in get_id_path(int(tax_id)):
+                res.add(id_path)
         if res:
-            return ncbi.get_topology(res,  intermediate_nodes=True)
+            return ncbi.get_topology(res,  intermediate_nodes=False)
         else:
             raise Exception(f"{file_name} length is zero.")
 

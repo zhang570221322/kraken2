@@ -114,4 +114,4 @@ for epoch in range(arg.num_epochs):
     print(message)
 my_plot(loss_record, train_acc_record, test_acc_record,
         ["Loss", "Train Acc", "Test Acc"], arg=arg)
-torch.save(model.state_dict(), "./args/Bruijn_k28")
+torch.save(model.state_dict(), "./args/dp1_k28")
