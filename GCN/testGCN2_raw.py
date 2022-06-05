@@ -48,7 +48,6 @@ def train():
         output = model(data)
         label = data.y.to(device).long()
         loss = crit(output, label)
-        pdb.set_trace()
         loss.backward()
         loss_all += loss.item()
         optimizer.step()

@@ -1,27 +1,16 @@
 
 import pdb
 from common import log_time, AUTO_INCREMENT
-from build_data.graph_model import feature_space_init, ReadGenerator,  feature_str
+from build_data.graph_model import   ReadGenerator,  feature_str,get_taxid_kraken2
 import copy
 from ete3 import NCBITaxa
 import numpy as np
-from load_ncbi_taxinfo import get_id_path,taxonomy
+from build_data.load_ncbi_taxinfo import get_id_path,taxonomy
  
 
 ncbi = NCBITaxa()
 
-kmer_encode_dic = {}
-
-
-def kmer_encode(kmer: str):
-    temp = kmer_encode_dic.get(kmer, None)
-    if temp == None:
-        feature = feature_str(kmer)
-        kmer_encode_dic[kmer] = feature
-        return feature
-    else:
-        return temp
-
+ 
 
 def data_iter(batch, data):
     """
@@ -34,66 +23,39 @@ def data_iter(batch, data):
         yield data[i: min(i + step_size, num_examples)]
 
 
-# def set_value(adj_matrix, feature_index, read_kmers, end, tar_value, feature_space):
-#     fea_target_feature = feature_space[read_kmers[end]][0]
-#     value = abs(adj_matrix[feature_index][fea_target_feature])
-#     if value == 0:
-#         adj_matrix[feature_index][fea_target_feature] = tar_value
-#     elif abs(value) > abs(tar_value):
-#         adj_matrix[feature_index][fea_target_feature] = tar_value
-
 
 def get_feature(file_name):
     read_generator = ReadGenerator(file_name, "reads")
-    feature_space_init.init()
-    read_kmers = []
-    u, v, weight = [], [], []
-    u_v_weight_dic = {}
+    _kmer_loc={}
+    x,u, v, weight = [],[], [], []
+ 
     for read in read_generator.read_Generator():
         tax_id = 0
-        feature_space = copy.deepcopy(feature_space_init)
-        tax_id = read.id.split("|kraken:taxid|")[-1].split("_")[0]
+
+        tax_id = get_taxid_kraken2(read.id)
         for kmer, kmer_read_index, _ in read_generator.Kmer_index_Generator(read):
             start, end = kmer_read_index
-            feature_space[kmer][1] += 1
-            feature_space[kmer][2] = start
-            read_kmers.append(kmer)
-        for kmer, kmer_read_index, _ in read_generator.Kmer_index_Generator(read):
-            start, end = kmer_read_index
-            feature_index = feature_space[kmer][0]
-            # for i in range(1,len(read.seq)):
-            for i in range(1, 2):
-                if start-i >= 0:
-                    fea_tar_index = feature_space[read_kmers[start-i]][0]
-                    key = f"{feature_index},{fea_tar_index}"
-                    value = u_v_weight_dic.get(key)
-                    tar_value = i
-                    if not value or tar_value > value:
-                        u.append(feature_index)
-                        v.append(fea_tar_index)
-                        weight.append(tar_value)
-                        u_v_weight_dic[key] = tar_value
-                if end + i <= len(read.seq):
-                    fea_tar_index = feature_space[read_kmers[start+i]][0]
-                    key = f"{feature_index},{fea_tar_index}"
-                    value = u_v_weight_dic.get(key)
-                    tar_value = i
-                    if not value or tar_value > value:
-                        u.append(feature_index)
-                        v.append(fea_tar_index)
-                        weight.append(tar_value)
-                        u_v_weight_dic[key] = tar_value
+            temp = _kmer_loc.get(kmer,None)
+            if temp:
+                temp.append(start)
+            else:
+                _kmer_loc[kmer]=[start]
+        for kmer, kmer_read_index, cur_kmer_feature in read_generator.Kmer_index_Generator(read):
+            x.append(cur_kmer_feature)
+            u_index, _ = kmer_read_index
+            v_list = _kmer_loc[kmer]
+            for v_index in v_list:
+                u.append(u_index)
+                v.append(v_index)
+                weight.append(abs(u_index-v_index))
         if tax_id == 0 or (not tax_id.isdigit()):
             continue
-        x = [temp[1:] for temp in list(feature_space.values())]
-        yield x, (u, v, weight), int(tax_id), read_kmers
-        read_kmers.clear()
+        yield x, (u, v, weight), int(tax_id) 
         u.clear()
         v.clear()
         weight.clear()
-        u_v_weight_dic.clear()
-
-
+        _kmer_loc.clear()
+        x.clear()
 def get_feature2(file_name):
     read_generator = ReadGenerator(file_name, "reads")
     x, u, v, weight = [], [], [], []
@@ -103,7 +65,41 @@ def get_feature2(file_name):
         tax_id = 0
         pre_kmer = ""
         auto_increse = AUTO_INCREMENT()
-        tax_id = read.id.split("|kraken:taxid|")[-1].split("_")[0]
+        tax_id = get_taxid_kraken2(read.id)
+        for cur_kmer, kmer_read_index, cur_kmer_feature in read_generator.Kmer_index_Generator(read):
+            cur_loc = kmer_loc.get(cur_kmer)
+            pre_loc = kmer_loc.get(pre_kmer)
+            if cur_loc == None:
+                index = next(auto_increse)
+                kmer_loc[cur_kmer] = index
+                cur_loc = index
+                # loc_kmer[start]=cur_kmer
+                x.append(cur_kmer_feature)
+            # kmer muti
+            # pdb.set_trace()
+            if pre_loc != None:
+                u.append(pre_loc)
+                v.append(cur_loc)
+            pre_kmer = cur_kmer
+        if tax_id == 0 or (not tax_id.isdigit()):
+            continue
+        yield x, (u, v, weight), int(tax_id), {v: k for k, v in kmer_loc.items()}
+        u.clear()
+        v.clear()
+        weight.clear()
+        x.clear()
+        kmer_loc.clear()
+        
+def get_feature3(file_name):
+    read_generator = ReadGenerator(file_name, "fasta2fastq")
+    x, u, v, weight = [], [], [], []
+    kmer_loc = {}
+    # loc_kmer={}
+    for read in read_generator.read_Generator():
+        tax_id = 0
+        pre_kmer = ""
+        auto_increse = AUTO_INCREMENT()
+        tax_id = get_taxid_kraken2(read.id)
         for cur_kmer, kmer_read_index, cur_kmer_feature in read_generator.Kmer_index_Generator(read):
             cur_loc = kmer_loc.get(cur_kmer)
             pre_loc = kmer_loc.get(pre_kmer)
@@ -128,10 +124,11 @@ def get_feature2(file_name):
         x.clear()
         kmer_loc.clear()
 
-
 class Y_Handle():
-    def __init__(self, file_name):
+    def __init__(self, file_name,type="reads"):
         self.file_name = file_name
+        self.count=0
+        self.type=type
 
     def muti_label_mode(self,mode=1):
         self.tree = self._get_ys_tree()
@@ -139,18 +136,22 @@ class Y_Handle():
             self.ys_dic, self.level_tax,self.level_dim = self._get_one_hot_dic()
         elif mode == 2:
             self.ys_dic, self.level_tax,self.level_dim = self._get_one_hot_dic2()
-        self.tree_prefix_num = len(self.tree.lineage)
-        self.max_y = self.tree.get_farthest_leaf()[1]
+        self.max_y = 7
 
     def _get_ys_tree(self):
         file_name = self.file_name
-        read_generator = ReadGenerator(file_name, "reads")
+        read_generator = ReadGenerator(file_name, self.type)
         res = set()
+        all_id_path={}
         for read in read_generator.read_Generator():
-            tax_id = read.id.split("|kraken:taxid|")[-1].split("_")[0]
-            for id_path in get_id_path(int(tax_id)):
+            tax_id = get_taxid_kraken2(read.id)
+            id_paths =get_id_path(tax_id,*taxonomy)
+            for id_path in id_paths:
                 res.add(id_path)
+            if int(tax_id) not in all_id_path:
+                all_id_path[int(tax_id)]=(id_paths)
         if res:
+            self.all_id_path = all_id_path
             return ncbi.get_topology(res,  intermediate_nodes=False)
         else:
             raise Exception(f"{file_name} length is zero.")
@@ -184,19 +185,12 @@ class Y_Handle():
             return y_index
         return foo, y_dic
     def _get_one_hot_dic2(self):
-        res = {}
-        def dfs(childrens, level):
-            if not childrens:
-                return
-            for tax in childrens:
-                tax_id = tax.taxid
-                dfs(tax.get_children(), level+1)
-                if level in res:
-                    res[level].append(tax_id)
-                else:
-                    res[level] = [tax_id]
-        childrens = self.tree.get_children()
-        dfs(childrens,0)
+        res = {0:set(),1:set(),2:set(),3:set(),4:set(),5:set(),6:set()}
+
+        for id_path in self.all_id_path.values():
+            for i in range(1,len(id_path)):
+                level = i-1
+                res[level].add(id_path[i])
         _dim={}
         _dic={}
         _level_tax={}
@@ -242,10 +236,26 @@ class Y_Handle():
 
     def get_linear_one_hot(self, y):
         _dic = self.ys_dic
-        tree_prefix_num = self.tree_prefix_num
-        max_y = int(self.max_y)
-        ncbi_lineage = ncbi.get_lineage(int(y))[tree_prefix_num:]
-        temp = [_dic[taxid] for taxid in ncbi_lineage]
+        max_y=self.max_y
+        id_path = self.all_id_path[int(y)][1:]
+        # try:
+        
+        # self.count+=1
+        # print(self.count)
+        # if self.count==180:
+        #     pdb.set_trace()            
+        temp = []
+        for taxid in id_path:
+            # if taxid ==0:
+            #     temp.append(0)
+            # else:
+            temp.append(_dic[taxid])
+        # except KeyError as err:
+        #     pdb.set_trace()
+        #     print(id_path)
+        #     print(y)
+        #     raise err
+
         res = np.pad(temp, (0, int(max_y)-len(temp)),
                      'constant', constant_values=(0))
-        return res,ncbi_lineage
+        return res,id_path

@@ -4,15 +4,15 @@ import torch
 from torch_geometric.utils import add_self_loops, to_networkx
 from torch_geometric.data import Data, InMemoryDataset
 from tqdm import tqdm
-from build_data.build_graph_reads import get_feature, get_feature2, Y_Handle
+from build_data.build_graph_reads import get_feature, get_feature3, Y_Handle
 from build_data.graph_model import ReadGenerator, DEFAULT_K
 from collections import Counter
 import pickle
 import matplotlib.pyplot as plt
 import networkx as nx
 import pdb
-file_name_prefix = "1"
-
+file_name_prefix = "10class"
+#%%
 
 class ReadsDataSet(InMemoryDataset):
     def __init__(self, root,  transform=None, pre_transform=None):
@@ -26,11 +26,11 @@ class ReadsDataSet(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return [f"{file_name_prefix}.fastq"]
+        return [f"{file_name_prefix}.fasta"]
 
     @property
     def processed_file_names(self):
-        return [f'{file_name_prefix}_k{DEFAULT_K}_dbg.dataset']
+        return [f'{file_name_prefix}_k{DEFAULT_K}_fasta_dbg.dataset']
 
     def download(self):
         pass
@@ -38,15 +38,15 @@ class ReadsDataSet(InMemoryDataset):
     def process(self):
         g_list = []
         print(self.__class__)
-        for fastq_dir in self.raw_paths:
-            reads_length = ReadGenerator(fastq_dir, "reads").get_read_length()
-            y_handle = Y_Handle(fastq_dir)
+        for fasta_dir in self.raw_paths:
+            reads_length = ReadGenerator(fasta_dir, "fasta2fastq").get_fasta2read_length()
+            y_handle = Y_Handle(fasta_dir,"fasta")
             y_handle.muti_label_mode(mode=2)
             print(y_handle.ys_dic)
             print(y_handle.tree)
             date_print(
-                f"Process files {fastq_dir}, Transform data to graph...")
-            for x, adj, y,_ in tqdm(get_feature2(fastq_dir), total=reads_length, unit="read"):
+                f"Process files {fasta_dir}, Transform data to graph...")
+            for x, adj, y,_ in tqdm(get_feature3(fasta_dir), total=reads_length, unit="read"):
                 # y = get_genus(y)
                 # if y in [1870884,1485]:
                 #     continue
@@ -79,8 +79,8 @@ class ReadsDataSet(InMemoryDataset):
 # %%
 if __name__ == "__main__":
     from common import get_tax_list 
-    fastq_dir = "/home/yegpu/zwl/kraken2/GCN/raw/1.fastq"
-    y_handle = Y_Handle(fastq_dir)
+    fastq_dir = "/home/yegpu/zwl/kraken2/GCN/raw/10class.fasta"
+    y_handle = Y_Handle(fastq_dir,"fasta")
     y_handle.muti_label_mode(mode=2)
     dataset = ReadsDataSet("./")
     taxs=dataset.level_tax

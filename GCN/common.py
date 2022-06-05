@@ -28,6 +28,9 @@ def get_tax_list(taxs, target,mode=1):
     elif mode == 2:
         res = []
         for first,second in enumerate(target):
+            if int(second)==0:
+                res.append(0)
+                continue
             key = f"{first}_{second}"
             res.append(taxs[key])
         return res

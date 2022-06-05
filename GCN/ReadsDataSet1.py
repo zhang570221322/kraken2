@@ -11,7 +11,7 @@ import pickle
 import matplotlib.pyplot as plt
 import networkx as nx
 import pdb
-file_name_prefix = "5class"
+file_name_prefix = "1"
 
 
 class ReadsDataSet(InMemoryDataset):
@@ -30,7 +30,7 @@ class ReadsDataSet(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return [f'{file_name_prefix}_k{DEFAULT_K}_all.dataset']
+        return [f'{file_name_prefix}_k{DEFAULT_K}_fix_pos.dataset']
 
     def download(self):
         pass
@@ -46,25 +46,20 @@ class ReadsDataSet(InMemoryDataset):
             print(y_handle.tree)
             date_print(
                 f"Process files {fastq_dir}, Transform data to graph...")
-            for x, adj, y, node_labels in tqdm(get_feature(fastq_dir), total=reads_length, unit="read"):
+            for x, adj, y in tqdm(get_feature(fastq_dir), total=reads_length, unit="read"):
                 # y = get_genus(y)
                 # if y in [1870884,1485]:
                 #     continue
-                
                 y_index,ncbi_lineage = y_handle.get_linear_one_hot(y)
-                # tax=y
-                tax=torch.tensor(ncbi_lineage[-1])
+                tax=torch.tensor(ncbi_lineage)
                 u, v, weight = adj
-                # edge_index, edge_attr = add_self_loops(
-                #     torch.tensor([u, v]), torch.tensor(weight), fill_value=1, num_nodes=4**DEFAULT_K)
                 edge_index, edge_attr = torch.tensor(
                     [u, v]),  torch.tensor(weight)
-                edge_index = edge_index.long()
-                edge_attr = edge_attr.short()
-                x = torch.tensor(x, dtype=torch.float)
-                # x = standardization(x)
+                # edge_index = edge_index.short()
+                # edge_attr = edge_attr.short()
+                x = torch.tensor(x).flatten(1)
                 y = torch.tensor(y_index)
-                g = Data(x=x, edge_index=edge_index, edge_attr=None, y=y,tax=tax)
+                g = Data(x=x, edge_index=edge_index, edge_attr=edge_attr, y=y,tax1=tax[-1],tax2=tax[-2],tax3=tax[-3])
                 g_list.append(g)
                 # pdb.set_trace()
                 # # #vision
@@ -75,7 +70,7 @@ class ReadsDataSet(InMemoryDataset):
                 # nx.draw_networkx_labels(G,pos = pos, labels = {})
                 # plt.show()
         data, slices = self.collate(g_list)
-        print(Counter(data.tax.numpy()))
+        print(Counter(data.tax1.numpy()))
         torch.save((data, slices), self.processed_paths[0])
         with open(self.processed_paths[0]+"_level_tax", 'wb') as f:
             pickle.dump([y_handle.level_tax,y_handle.level_dim], f)
@@ -84,12 +79,26 @@ class ReadsDataSet(InMemoryDataset):
 # %%
 if __name__ == "__main__":
     from common import get_tax_list 
+    fastq_dir = "/home/yegpu/zwl/kraken2/GCN/raw/1.fastq"
+    y_handle = Y_Handle(fastq_dir)
+    y_handle.muti_label_mode(mode=2)
     dataset = ReadsDataSet("./")
     taxs=dataset.level_tax
     error=[]
     for data in dataset:
-        temp=get_tax_list(taxs,list(data.y.numpy()),mode=2)[-1]
-        if int(temp) !=  data.tax[-1].item():
-            error.append(data)
+        try:
+            temp=get_tax_list(taxs,list(data.y.numpy()),mode=2)
+            
+        except KeyError as err:
+                pdb.set_trace()
+                raise err    
+        data_tax = [data.tax3,data.tax2,data.tax1]
+        for i in range(1,4):
+            real= int(temp[-i])
+            if real ==0:
+                    continue
+            predi=data_tax.pop()
+            if real !=  predi.item():
+                error.append(data)
     print(len(error))
 # %%

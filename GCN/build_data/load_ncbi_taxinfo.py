@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+import pdb
 RANKS = ['superkingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species', 'strain']
 DICT_RANK_TO_INDEX = dict(zip(RANKS, list(range(len(RANKS)))))
 RANKS_LOW2HIGH = list(reversed(RANKS))
@@ -87,6 +87,8 @@ def load_tax_info(ncbi_nodes_file):
 
 
 def get_id_path(tax_id, tax_id_to_parent, tax_id_to_rank, tax_id_to_tax_id):
+    # check 
+    RANKS_CHECK = {'superkingdom':0, 'phylum':0, 'class':0, 'order':0, 'family':0, 'genus':0}
     tax_id =int(tax_id)
     if tax_id ==0:
         return [0]
@@ -114,11 +116,22 @@ def get_id_path(tax_id, tax_id_to_parent, tax_id_to_rank, tax_id_to_tax_id):
         if tax_id_to_rank[id] not in RANKS:
             continue
         index = DICT_RANK_TO_INDEX[tax_id_to_rank[id]]
+        RANKS_CHECK[tax_id_to_rank[id]] = 1
         path[index] = id
         if tax_id_to_rank[id] == "superkingdom":
             break
+    # CHECK, sometime it have no family
+    for index,rank in enumerate(RANKS[:-2]):
+        if rank == tax_id_to_rank[tax_id]:
+            break
+        if RANKS_CHECK[rank]==1 :
+            continue
+        else:
+            path[index]=tax_id_to_parent[path[index+1]]
+    path.remove('') if '' in set(path) else None
     return path
-taxonomy_db="/data/home/wlzhang/classfication/kraken2_db/2021_11_01/taxonomy"
+# taxonomy_db="/data/home/wlzhang/classfication/kraken2_db/2021_11_01/taxonomy"
+taxonomy_db="/home/yegpu/zwl/taxonomy/"
 tax_id_to_tax_id = load_merged(f"{taxonomy_db}/merged.dmp")
 tax_id_to_parent,tax_id_to_rank = load_tax_info(f"{taxonomy_db}/nodes.dmp")
 tax_id_to_name = load_names(tax_id_to_rank,f"{taxonomy_db}/names.dmp")

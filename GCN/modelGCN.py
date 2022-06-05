@@ -33,6 +33,7 @@ class Net(nn.Module):
     def forward(self, data):
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
         edge_index = edge_index.long()
+        x=x.float()
         if edge_attr != None:
             edge_attr = edge_attr.float()
         # pdb.set_trace()
@@ -58,6 +59,17 @@ class Net(nn.Module):
         x = x1 + x2 + x3
         x = self.out(x)
         return x
+    def criterion(self,loss_func,outputs,tar,level_dim,weight=None):
+        losses = 0
+        if weight==None:
+            weight = torch.ones((len(level_dim,)))
+        start =0
+        end=0
+        for index,j in enumerate(list(level_dim.values())[::-1]):
+            end+=j
+            losses+=F.nll_loss(F.log_softmax(outputs[:,start:end],dim=1),tar[:,index])*weight[index]
+            start +=j 
+        return losses
 
 
 class Net2(torch.nn.Module):
