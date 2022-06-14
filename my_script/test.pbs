@@ -1,0 +1,60 @@
+#!/bin/bash
+#PBS -N kranken test
+#PBS -l nodes=node7:ppn=48
+#PBS -l walltime=9000:00:00
+##PBS -V
+set +e
+# 加载环境
+source /data/home/wlzhang/Work_Environment.sh
+python=/data/home/wlzhang/anaconda3/envs/bio/bin/python
+thread=2
+echo "重新编译kraken_weight"
+cd ${kraken2}/kraken2_weight/kraken2
+./install_kraken2.sh ../kraken2_build/
+
+# var
+file_dir=/data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/data
+db=$kraken2_db_cus
+echo "清除之前的数据"
+cd $file_dir
+# rm *.data
+# rm *weight.output
+# rm *weight.report
+# rm *origin.output
+# rm *origin.report
+# rm *.jpg
+# rm *.statistics
+function run_once() {
+    file=$1
+    statistics_name=${file}.statistics
+
+    echo "执行kraken_origin"
+    cd ${work_dir}
+    software=origin && $kraken2_weight/kraken2 --origin -threads $thread -db $db $file --report ${file}.${software}.report --output ${file}.${software}.output 2>>$statistics_name
+    echo "分析冲突, 执行kraken_weight"
+    cd ${work_dir}
+    software=weight && $kraken2_weight/kraken2 --keep-map -threads $thread -db $db $file --report ${file}.${software}.report --output ${file}.${software}.output 2>>$statistics_name
+    software=weight && $kraken2_weight/kraken2 -threads $thread -db $db $file --report ${file}.${software}.report --output ${file}.${software}.output 2>>$statistics_name
+
+    echo "输出图表"
+    $python /data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/script/plot.py $statistics_name
+
+    ehco "清除所有,只保留图片"
+    rm ${kraken2_db_cus}/conflict_hash.k2d
+    # rm ${file}.origin*
+    # rm ${file}.weight*
+    # rm $statistics_name
+}
+
+for file in $(ls $file_dir/*.fastq); do
+    run_once $file
+done
+
+echo "求平均,画表"
+cd ${work_dir}
+$python /data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/script/plot_total.py $file_dir
+
+echo "删除.data文件"
+cd $file_dir
+# rm *.data
+# software=origin && $kraken2_origin/kraken2   -threads $thread -db $db $file --report ${file}.${software}.report --output ${file}.${software}.output

@@ -1,0 +1,28 @@
+#!/bin/bash
+#PBS -N kranken test
+#PBS -l nodes=node7:ppn=48
+#PBS -l walltime=9000:00:00
+##PBS -V
+source /data/home/wlzhang/Work_Environment.sh
+echo "重新编译kraken_weight"
+cd ${kraken2}/kraken2_weight/kraken2
+./install_kraken2.sh ../kraken2_build/
+#env
+python=/data/home/wlzhang/anaconda3/envs/bio/bin/python
+fastq_filter=/data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/script/fastq_filter.py
+thread=1
+# var
+file_dir=/data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/data/
+
+function run_once() {
+    file=$1
+    error_id=$file.error.id
+    error_file=$file.error
+    software=origin && $kraken2_weight/kraken2 --origin -threads $thread -db $kraken2_db_cus $file --report ${file}.${software}.report --output ${file}.${software}.output >$error_id
+    $python $fastq_filter $file $error_id
+}
+# for file in $(ls $file_dir/*.fastq); do
+#     run_once $file
+# done
+file=/data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/script/test_data/0.fastq
+run_once $file

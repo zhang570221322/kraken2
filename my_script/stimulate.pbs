@@ -1,0 +1,10 @@
+#!/bin/bash
+#PBS -N kranken test
+#PBS -l nodes=node7:ppn=48
+#PBS -l walltime=9000:00:00
+##PBS -V
+set +e
+out_dir=/data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/script/GCF_000019
+python=/data/home/wlzhang/anaconda3/envs/bio/bin/python
+python_script=/data/home/wlzhang/classfication/software/kraken2/test/stimulation_test/normal/script/stimulate.py
+python $python_script $out_dir
